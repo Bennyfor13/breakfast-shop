@@ -155,3 +155,9 @@ def api_chat(text: str):
     from backend.bot.nlu import parse_intent, Intent
     parsed = parse_intent(text)
     return {"intent": parsed.intent.name, "params": parsed.params, "raw": text}
+
+
+# Auto-seed on first import
+if not store.list_staff():
+    from backend.seed import seed
+    seed(store)
