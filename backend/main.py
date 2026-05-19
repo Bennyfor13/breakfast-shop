@@ -18,6 +18,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(api_router)
+    from backend.bot.feishu import feishu_router, set_store
+    app.include_router(feishu_router)
+    from backend.api.routes import store as api_store
+    set_store(api_store)
     if FRONTEND_DIR.exists():
         app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
     return app
