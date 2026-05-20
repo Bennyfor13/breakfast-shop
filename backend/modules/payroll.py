@@ -17,7 +17,7 @@ def _gen_week_starts(from_date: str, to_date: str):
 def count_shifts_worked(
     store: AbstractStore, staff_id: str, from_date: str, to_date: str,
 ) -> dict[str, int]:
-    """Returns {"早班": N, "晚班": M} excluding absent days."""
+    """Returns {"早班": N, "晚班": M} excluding absent days, including substitute shifts."""
     all_shifts = []
     for week_start in _gen_week_starts(from_date, to_date):
         all_shifts.extend(store.get_shifts(week_start))
@@ -36,6 +36,15 @@ def count_shifts_worked(
     for s in shifts:
         if s.date not in absent_dates:
             counts[s.period] = counts.get(s.period, 0) + 1
+
+    # Add substitute shifts (shifts from absent staff this staff is covering)
+    for a in attendance:
+        for absent_id, sub_id in a.substitute.items():
+            if sub_id == staff_id:
+                for s in all_shifts:
+                    if s.staff_id == absent_id and s.date == a.date:
+                        counts[s.period] = counts.get(s.period, 0) + 1
+
     return counts
 
 
@@ -47,9 +56,15 @@ def calculate_salary(
         return {}
 
     counts = count_shifts_worked(store, staff_id, from_date, to_date)
+
+    # Overtime
+    attendance = store.list_attendance(from_date, to_date)
+    overtime_count = sum(1 for a in attendance if staff_id in a.overtime)
+
     morning_pay = counts.get("早班", 0) * staff.morning_rate
     evening_pay = counts.get("晚班", 0) * staff.evening_rate
-    base = morning_pay + evening_pay
+    overtime_pay = overtime_count * staff.evening_rate * 1.5
+    base = morning_pay + evening_pay + overtime_pay
 
     scores = store.get_performance(staff_id, from_date, to_date)
     avg_score = sum(s.score for s in scores) / len(scores) if scores else 3.0
@@ -60,6 +75,7 @@ def calculate_salary(
         "staff_name": staff.name,
         "morning_shifts": counts.get("早班", 0),
         "evening_shifts": counts.get("晚班", 0),
+        "overtime_shifts": overtime_count,
         "morning_rate": staff.morning_rate,
         "evening_rate": staff.evening_rate,
         "base_pay": base,

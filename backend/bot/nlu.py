@@ -13,6 +13,11 @@ class Intent(Enum):
     ADD_MENU = auto()
     MARK_ABSENT = auto()
     MARK_OVERTIME = auto()
+    CONFIRM_SCHEDULE = auto()
+    EDIT_SCHEDULE = auto()
+    CONFIRM_PAYROLL = auto()
+    EDIT_SINGLE_SHIFT = auto()
+    FIND_REPLACEMENT = auto()
     UNKNOWN = auto()
 
 
@@ -32,6 +37,11 @@ INTENT_PATTERNS: list[tuple[Intent, list[str]]] = [
     (Intent.ADD_MENU, ["新增菜品", "添加菜品", "加个菜"]),
     (Intent.MARK_ABSENT, ["请假", "不来", "缺勤"]),
     (Intent.MARK_OVERTIME, ["加班", "替班"]),
+    (Intent.CONFIRM_SCHEDULE, ["确认排班", "发布排班", "排班确认"]),
+    (Intent.EDIT_SCHEDULE, ["调整排班", "修改排班", "排班调整"]),
+    (Intent.CONFIRM_PAYROLL, ["确认工资", "工资确认", "工资单确认"]),
+    (Intent.EDIT_SINGLE_SHIFT, ["换成", "替换", "换班", "把.*换成"]),
+    (Intent.FIND_REPLACEMENT, ["找谁替", "谁替班", "替班人选", "找人替"]),
 ]
 
 

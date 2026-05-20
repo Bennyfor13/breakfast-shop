@@ -7,12 +7,13 @@
   <link rel="manifest" href="/manifest.json">
   <title>早餐店助手</title>
   <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <header>
     <h1>🥟 早餐店助手</h1>
     <nav id="tabs">
-      <button data-tab="schedule" class="active">排班</button>
+      <button data-tab="schedule">排班</button>
       <button data-tab="inventory">备料</button>
       <button data-tab="pricing">定价</button>
       <button data-tab="payroll">工资</button>
@@ -22,5 +23,10 @@
   </header>
   <main id="content"></main>
   <script src="/app.js"></script>
+  <script src="/components/schedule.js"></script>
+  <script src="/components/payroll.js"></script>
+  <script src="/components/inventory.js"></script>
+  <script src="/components/pricing.js"></script>
+  <script src="/components/menu.js"></script>
 </body>
 </html>

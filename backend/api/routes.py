@@ -1,9 +1,9 @@
 from __future__ import annotations
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from backend.data.mock_store import MockStore
 from backend.data.models import (
     Staff, Role, MenuItem, Ingredient, DemandTemplate,
-    AttendanceLog, PerformanceScore, IngredientStock,
+    AttendanceLog, PerformanceScore, IngredientStock, WasteFeedback,
 )
 from backend.modules.base_data import (
     create_staff, list_active_staff, update_staff, remove_staff,
@@ -11,6 +11,7 @@ from backend.modules.base_data import (
 )
 from backend.modules.scheduling import (
     generate_weekly_schedule, find_replacement,
+    edit_shift, assign_replacement,
 )
 from backend.modules.inventory import (
     forecast_ingredient_needs, generate_purchase_list,
@@ -29,7 +30,7 @@ def api_list_staff():
 
 
 @router.post("/staff")
-def api_create_staff(name: str, roles: list[str], morning_rate: float = 80, evening_rate: float = 60, note: str = ""):
+def api_create_staff(name: str, roles: list[str] = Query(...), morning_rate: float = 80, evening_rate: float = 60, note: str = ""):
     role_enums = [Role(r) for r in roles]
     staff = create_staff(store, None, name, role_enums, morning_rate, evening_rate, note)
     return staff.model_dump()
@@ -56,7 +57,7 @@ def api_list_menu():
 
 
 @router.post("/menu")
-def api_create_menu(name: str, price: float, bom: list[dict]):
+def api_create_menu(name: str, price: float, bom: list[dict] = []):
     ingredients = [Ingredient(**i) for i in bom]
     item = create_menu_item(store, None, name, price, ingredients)
     return item.model_dump()
@@ -102,7 +103,34 @@ def api_find_replacement(absent_id: str, date: str):
     return [c.model_dump() for c in candidates]
 
 
+@router.post("/schedule/edit")
+def api_edit_shift(data: dict):
+    success = edit_shift(
+        store, data["date"], data["period"],
+        data["old_staff_id"], data["new_staff_id"],
+    )
+    if not success:
+        raise HTTPException(404, "Shift not found")
+    return {"ok": True}
+
+
+@router.post("/schedule/assign-replacement")
+def api_assign_replacement(data: dict):
+    result = assign_replacement(
+        store, data["absent_id"], data["date"],
+        data.get("replacement_id"),
+    )
+    if not result["assigned"]:
+        raise HTTPException(400, result.get("reason", "Assignment failed"))
+    return result
+
+
 # -- Inventory --
+@router.get("/inventory/stocks")
+def api_list_stocks():
+    return [s.model_dump() for s in store.list_stocks()]
+
+
 @router.get("/inventory/forecast")
 def api_forecast(sales: str = ""):
     # sales: "m1:100,m2:50"
@@ -114,6 +142,13 @@ def api_forecast(sales: str = ""):
     needs = forecast_ingredient_needs(store, predicted)
     purchases = generate_purchase_list(store, needs)
     return {"needs": needs, "purchases": purchases}
+
+
+@router.post("/waste")
+def api_save_waste(data: dict):
+    fb = WasteFeedback(**data)
+    store.save_waste(fb)
+    return {"ok": True}
 
 
 # -- Attendance --

@@ -1,4 +1,7 @@
 const API = '/api';
+let currentTab = 'schedule';
+
+// ── helpers ──────────────────────────────────────────
 
 async function fetchJSON(url) {
   const res = await fetch(url);
@@ -6,11 +9,51 @@ async function fetchJSON(url) {
   return res.json();
 }
 
+function getMonday(d) {
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d.setDate(diff));
+  return monday.toISOString().slice(0, 10);
+}
+
+function dayName(dateStr) {
+  const d = new Date(dateStr);
+  return ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
+}
+
+function getToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function showToast(msg) {
+  const old = document.getElementById('toast');
+  if (old) old.remove();
+  const t = document.createElement('div');
+  t.id = 'toast';
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 24px;border-radius:20px;font-size:14px;z-index:999;white-space:nowrap;';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+function showForm(formId, btnId) {
+  document.getElementById(formId).style.display = 'block';
+  document.getElementById(btnId).style.display = 'none';
+}
+
+function hideForm(formId, btnId) {
+  document.getElementById(formId).style.display = 'none';
+  document.getElementById(btnId).style.display = 'inline-block';
+}
+
+// ── navigation ───────────────────────────────────────
+
 document.querySelectorAll('nav button').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    loadTab(btn.dataset.tab);
+    currentTab = btn.dataset.tab;
+    loadTab(currentTab);
   });
 });
 
@@ -27,89 +70,30 @@ function loadTab(tab) {
   }
 }
 
-async function renderSchedule(el) {
-  const weekStart = getMonday(new Date());
-  try {
-    const data = await fetchJSON(`${API}/schedule?week_start=${weekStart}`);
-    const byDate = {};
-    data.shifts.forEach(s => {
-      byDate[s.date] = byDate[s.date] || {早班: [], 晚班: []};
-      byDate[s.date][s.period].push(s);
-    });
-
-    let html = '<h2>本周排班 (' + weekStart + ')</h2>';
-    for (const [date, periods] of Object.entries(byDate).sort()) {
-      html += `<div class="card"><h3>${date} ${dayName(date)}</h3>`;
-      for (const [period, shifts] of Object.entries(periods)) {
-        html += `<p><strong>${period}:</strong> `;
-        html += shifts.map(s => `${s.staff_id}(${s.role})`).join(' / ') || '—';
-        html += '</p>';
-      }
-      html += '</div>';
-    }
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p><p>请先确认服务器已启动并运行种子数据。</p></div>`;
-  }
-}
-
-async function renderInventory(el) {
-  const sales = prompt("输入预测销量 (格式: m1:100,m2:50):", "m1:100,m2:50,m3:80,m4:60,m5:40");
-  if (!sales) { el.innerHTML = '<div class="card"><p>已取消</p></div>'; return; }
-  try {
-    const data = await fetchJSON(`${API}/inventory/forecast?sales=${encodeURIComponent(sales)}`);
-    let html = '<h2>备料预测</h2>';
-    html += '<div class="card"><h3>原料需求</h3><table><tr><th>原料</th><th>用量</th><th>需采购</th></tr>';
-    for (const [name, need] of Object.entries(data.needs)) {
-      const purchase = data.purchases[name] || 0;
-      html += `<tr><td>${name}</td><td>${need}g</td><td style="color:${purchase > 0 ? 'var(--warn)' : 'var(--good)'}">${purchase > 0 ? purchase + 'g' : '库存够'}</td></tr>`;
-    }
-    html += '</table></div>';
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
-  }
-}
-
-async function renderPricing(el) {
-  const vols = prompt("输入月销量 (格式: m1:3000,m2:2000,m3:1500):", "m1:3000,m2:2000,m3:1500,m4:1000,m5:800");
-  if (!vols) { el.innerHTML = '<div class="card"><p>已取消</p></div>'; return; }
-  try {
-    const data = await fetchJSON(`${API}/pricing/analysis?sales_volumes=${encodeURIComponent(vols)}`);
-    let html = '<h2>利润分析</h2>';
-    const badgeMap = {明星: 'star', 金牛: 'cow', 引流款: 'traffic', 考虑砍掉: 'cut'};
-    data.forEach(item => {
-      html += `<div class="card"><h3>${item.item_name} <span class="badge badge-${badgeMap[item.quadrant]}">${item.quadrant}</span></h3>`;
-      html += `<p>售价 ¥${item.selling_price} | 成本 ¥${item.total_cost} | 毛利 ¥${item.gross_profit} (${item.margin_pct}%)</p>`;
-      html += `<p style="font-size:12px;color:var(--muted)">月销 ${item.sales_volume} 份</p></div>`;
-    });
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
-  }
-}
-
-async function renderPayroll(el) {
-  const ym = new Date().toISOString().slice(0, 7);
-  try {
-    const data = await fetchJSON(`${API}/payroll?year_month=${ym}`);
-    let html = `<h2>${ym} 工资单</h2>`;
-    data.forEach(p => {
-      html += `<div class="card"><h3>${p.staff_name}</h3>`;
-      html += `<p>早班 ${p.morning_shifts}次 x ¥${p.morning_rate} + 晚班 ${p.evening_shifts}次 x ¥${p.evening_rate}</p>`;
-      html += `<p>基础 ¥${p.base_pay} + 绩效 ¥${p.performance_bonus} (${p.performance_score}分) = <strong>¥${p.total}</strong></p></div>`;
-    });
-    if (data.length === 0) html += '<p>本月暂无排班数据，请先生成排班。</p>';
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
-  }
-}
+// ═══════════════════════════════════════════════════════
+//  1. Staff Tab — list + create form
+// ═══════════════════════════════════════════════════════
 
 async function renderStaff(el) {
   try {
     const data = await fetchJSON(`${API}/staff`);
     let html = '<h2>员工管理</h2>';
+
+    html += `<button id="staff-toggle" class="btn btn-sm btn-outline" onclick="showForm('staff-form','staff-toggle')" style="margin-bottom:12px">➕ 新增员工</button>`;
+    html += `<div id="staff-form" class="card" style="display:none">`;
+    html += `<div class="form-group"><label>姓名</label><input id="staff-name" placeholder="姓名"></div>`;
+    html += `<div class="form-group"><label>角色</label>`;
+    html += `<label class="cb-label"><input type="checkbox" value="后厨" class="staff-role"> 后厨</label>`;
+    html += `<label class="cb-label"><input type="checkbox" value="传菜" class="staff-role"> 传菜</label>`;
+    html += `<label class="cb-label"><input type="checkbox" value="收银" class="staff-role"> 收银</label>`;
+    html += `</div>`;
+    html += `<div class="form-group"><label>早班工资</label><input id="staff-morning" type="number" value="80"></div>`;
+    html += `<div class="form-group"><label>晚班工资</label><input id="staff-evening" type="number" value="60"></div>`;
+    html += `<div class="form-group"><label>备注</label><input id="staff-note" placeholder="可选"></div>`;
+    html += `<button class="btn btn-sm" onclick="handleCreateStaff()">保存</button> `;
+    html += `<button class="btn btn-sm btn-outline" onclick="hideForm('staff-form','staff-toggle')">取消</button>`;
+    html += `</div>`;
+
     data.forEach(s => {
       html += `<div class="card"><h3>${s.name}</h3>`;
       html += `<p>角色: ${s.roles.join(' / ')} | 早班 ¥${s.morning_rate} / 晚班 ¥${s.evening_rate}</p>`;
@@ -118,36 +102,54 @@ async function renderStaff(el) {
     });
     el.innerHTML = html;
   } catch(e) {
-    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
+    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p><p>请先确认服务器已启动并运行种子数据。</p></div>`;
   }
 }
 
-async function renderMenu(el) {
+async function handleCreateStaff() {
+  const name = document.getElementById('staff-name').value.trim();
+  if (!name) { showToast('请输入姓名'); return; }
+  const roles = [...document.querySelectorAll('.staff-role:checked')].map(cb => cb.value);
+  if (roles.length === 0) { showToast('请选择角色'); return; }
+  const morning = document.getElementById('staff-morning').value || '80';
+  const evening = document.getElementById('staff-evening').value || '60';
+  const note = document.getElementById('staff-note').value;
+
+  const params = new URLSearchParams({name, morning_rate: morning, evening_rate: evening, note});
+  roles.forEach(r => params.append('roles', r));
+
   try {
-    const data = await fetchJSON(`${API}/menu`);
-    let html = '<h2>菜单管理</h2>';
-    data.forEach(m => {
-      html += `<div class="card"><h3>${m.name} — ¥${m.price}</h3>`;
-      html += '<p style="font-size:12px;color:var(--muted)">原料: ';
-      html += m.bom.map(i => `${i.name} ${i.amount}${i.unit}`).join(', ');
-      html += '</p></div>';
-    });
-    el.innerHTML = html;
+    const res = await fetch(`${API}/staff?${params}`, {method: 'POST'});
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || '请求失败'); }
+    showToast('员工已添加');
+    loadTab(currentTab);
   } catch(e) {
-    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
+    showToast('保存失败: ' + e.message);
   }
 }
 
-function getMonday(d) {
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d.setDate(diff));
-  return monday.toISOString().slice(0, 10);
-}
+// ═══════════════════════════════════════════════════════
+//  2. Menu Tab — now in components/menu.js
+// ═══════════════════════════════════════════════════════
 
-function dayName(dateStr) {
-  const d = new Date(dateStr);
-  return ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
-}
+// ═══════════════════════════════════════════════════════
+//  3. Schedule Tab — now in components/schedule.js
+// ═══════════════════════════════════════════════════════
 
-loadTab('schedule');
+// ═══════════════════════════════════════════════════════
+//  4. Inventory Tab — now in components/inventory.js
+// ═══════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+//  5. Pricing Tab — now in components/pricing.js
+// ═══════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+//  6. Payroll Tab — now in components/payroll.js
+// ═══════════════════════════════════════════════════════
+
+// ── initial load ─────────────────────────────────────
+
+const initialTab = window.INITIAL_TAB || 'schedule';
+document.querySelector(`nav button[data-tab="${initialTab}"]`)?.classList.add('active');
+loadTab(initialTab);
