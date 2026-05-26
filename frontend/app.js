@@ -57,76 +57,22 @@ document.querySelectorAll('nav button').forEach(btn => {
   });
 });
 
-function loadTab(tab) {
+function loadTab(tab, extra) {
   const content = document.getElementById('content');
   content.innerHTML = '<div class="loading">加载中...</div>';
   switch(tab) {
-    case 'schedule': renderSchedule(content); break;
+    case 'schedule': renderSchedule(content, extra); break;
     case 'inventory': renderInventory(content); break;
+    case 'accounting': renderAccounting(); break;
     case 'pricing': renderPricing(content); break;
-    case 'payroll': renderPayroll(content); break;
     case 'staff': renderStaff(content); break;
     case 'menu': renderMenu(content); break;
   }
 }
 
 // ═══════════════════════════════════════════════════════
-//  1. Staff Tab — list + create form
+//  1. Staff Tab — now in components/staff.js
 // ═══════════════════════════════════════════════════════
-
-async function renderStaff(el) {
-  try {
-    const data = await fetchJSON(`${API}/staff`);
-    let html = '<h2>员工管理</h2>';
-
-    html += `<button id="staff-toggle" class="btn btn-sm btn-outline" onclick="showForm('staff-form','staff-toggle')" style="margin-bottom:12px">➕ 新增员工</button>`;
-    html += `<div id="staff-form" class="card" style="display:none">`;
-    html += `<div class="form-group"><label>姓名</label><input id="staff-name" placeholder="姓名"></div>`;
-    html += `<div class="form-group"><label>角色</label>`;
-    html += `<label class="cb-label"><input type="checkbox" value="后厨" class="staff-role"> 后厨</label>`;
-    html += `<label class="cb-label"><input type="checkbox" value="传菜" class="staff-role"> 传菜</label>`;
-    html += `<label class="cb-label"><input type="checkbox" value="收银" class="staff-role"> 收银</label>`;
-    html += `</div>`;
-    html += `<div class="form-group"><label>早班工资</label><input id="staff-morning" type="number" value="80"></div>`;
-    html += `<div class="form-group"><label>晚班工资</label><input id="staff-evening" type="number" value="60"></div>`;
-    html += `<div class="form-group"><label>备注</label><input id="staff-note" placeholder="可选"></div>`;
-    html += `<button class="btn btn-sm" onclick="handleCreateStaff()">保存</button> `;
-    html += `<button class="btn btn-sm btn-outline" onclick="hideForm('staff-form','staff-toggle')">取消</button>`;
-    html += `</div>`;
-
-    data.forEach(s => {
-      html += `<div class="card"><h3>${s.name}</h3>`;
-      html += `<p>角色: ${s.roles.join(' / ')} | 早班 ¥${s.morning_rate} / 晚班 ¥${s.evening_rate}</p>`;
-      if (s.note) html += `<p style="font-size:12px;color:var(--muted)">${s.note}</p>`;
-      html += '</div>';
-    });
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p><p>请先确认服务器已启动并运行种子数据。</p></div>`;
-  }
-}
-
-async function handleCreateStaff() {
-  const name = document.getElementById('staff-name').value.trim();
-  if (!name) { showToast('请输入姓名'); return; }
-  const roles = [...document.querySelectorAll('.staff-role:checked')].map(cb => cb.value);
-  if (roles.length === 0) { showToast('请选择角色'); return; }
-  const morning = document.getElementById('staff-morning').value || '80';
-  const evening = document.getElementById('staff-evening').value || '60';
-  const note = document.getElementById('staff-note').value;
-
-  const params = new URLSearchParams({name, morning_rate: morning, evening_rate: evening, note});
-  roles.forEach(r => params.append('roles', r));
-
-  try {
-    const res = await fetch(`${API}/staff?${params}`, {method: 'POST'});
-    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || '请求失败'); }
-    showToast('员工已添加');
-    loadTab(currentTab);
-  } catch(e) {
-    showToast('保存失败: ' + e.message);
-  }
-}
 
 // ═══════════════════════════════════════════════════════
 //  2. Menu Tab — now in components/menu.js

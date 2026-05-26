@@ -18,6 +18,12 @@ class Intent(Enum):
     CONFIRM_PAYROLL = auto()
     EDIT_SINGLE_SHIFT = auto()
     FIND_REPLACEMENT = auto()
+    MULTI_DAY_ABSENCE = auto()
+    WEEK_ABSENCE = auto()
+    RECORD_REVENUE = auto()
+    QUERY_PROFIT = auto()
+    QUERY_CONSUMPTION = auto()
+    RECORD_ACTUAL_CONSUMPTION = auto()
     UNKNOWN = auto()
 
 
@@ -35,7 +41,7 @@ INTENT_PATTERNS: list[tuple[Intent, list[str]]] = [
     (Intent.SHOW_PAYROLL, ["工资", "薪资", "发钱"]),
     (Intent.ADD_STAFF, ["新增员工", "添加员工", "加个员工"]),
     (Intent.ADD_MENU, ["新增菜品", "添加菜品", "加个菜"]),
-    (Intent.MARK_ABSENT, ["请假", "不来", "缺勤"]),
+    (Intent.MARK_ABSENT, ["请假", "不来", "缺勤", "休息", "不上班", "歇"]),
     (Intent.MARK_OVERTIME, ["加班", "替班"]),
     (Intent.CONFIRM_SCHEDULE, ["确认排班", "发布排班", "排班确认"]),
     (Intent.EDIT_SCHEDULE, ["调整排班", "修改排班", "排班调整"]),
@@ -78,7 +84,7 @@ def parse_intent(text: str) -> ParsedIntent:
             result.params["price"] = float(price_match.group(1))
 
     if result.intent == Intent.MARK_ABSENT:
-        name_match = re.search(r"([\w一-鿿]{1,4})(?:明天|今天|后天)?请假", text)
+        name_match = re.search(r"([\w一-鿿]{1,4})(?:明天|今天|后天|周[一二三四五六日天]|礼拜|星期|5月|休息|请假|不来|缺勤|不上班)", text)
         if name_match:
             result.params["staff_name"] = name_match.group(1)
 

@@ -5,10 +5,11 @@ from backend.data.interface import AbstractStore
 
 
 def _gen_week_starts(from_date: str, to_date: str):
-    """Generate week-start dates covering [from_date, to_date]."""
+    """Generate Monday-aligned week-start dates covering [from_date, to_date]."""
     from_dt = datetime.strptime(from_date, "%Y-%m-%d")
     to_dt = datetime.strptime(to_date, "%Y-%m-%d")
-    cursor = from_dt
+    # Start from the Monday of the week containing from_date
+    cursor = from_dt - timedelta(days=from_dt.weekday())
     while cursor <= to_dt:
         yield cursor.strftime("%Y-%m-%d")
         cursor += timedelta(days=7)
@@ -89,10 +90,19 @@ def generate_monthly_payroll(
     store: AbstractStore, year_month: str,
 ) -> list[dict]:
     from calendar import monthrange
+    from backend.modules.scheduling import generate_weekly_schedule
+
     year, month = int(year_month[:4]), int(year_month[5:7])
     _, last_day = monthrange(year, month)
     from_date = f"{year_month}-01"
     to_date = f"{year_month}-{last_day:02d}"
+
+    # Auto-generate schedules for any missing weeks in the month
+    for week_start in _gen_week_starts(from_date, to_date):
+        existing = store.get_shifts(week_start)
+        if not existing:
+            schedule = generate_weekly_schedule(store, week_start)
+            store.save_shifts(schedule.shifts)
 
     results = []
     for staff in store.list_staff():

@@ -1,7 +1,10 @@
+from __future__ import annotations
 from backend.data.interface import AbstractStore
 from backend.data.models import (
     Staff, MenuItem, DemandTemplate, Shift, AttendanceLog,
     PerformanceScore, IngredientStock, SalesRecord, WasteFeedback,
+    PlatformRevenue, ActualConsumption, MonthlyFixedCost,
+    DailyIncome, DailyExpense,
 )
 
 
@@ -16,6 +19,11 @@ class MockStore(AbstractStore):
         self.stocks: dict[str, IngredientStock] = {}
         self.sales: list[SalesRecord] = []
         self.waste: list[WasteFeedback] = []
+        self.platform_revenues: list[PlatformRevenue] = []
+        self.actual_consumptions: list[ActualConsumption] = []
+        self.monthly_costs: dict[str, MonthlyFixedCost] = {}
+        self.daily_income: dict[str, DailyIncome] = {}
+        self.daily_expense: dict[str, DailyExpense] = {}
 
     def list_staff(self) -> list[Staff]:
         return [s for s in self.staff.values() if s.active]
@@ -62,7 +70,11 @@ class MockStore(AbstractStore):
     def save_shifts(self, shifts: list[Shift]) -> None:
         if not shifts:
             return
-        week = shifts[0].date[:10]
+        # Derive Monday of the week from the first shift's date
+        from datetime import datetime, timedelta
+        dt = datetime.strptime(shifts[0].date, "%Y-%m-%d")
+        monday = dt - timedelta(days=dt.weekday())
+        week = monday.strftime("%Y-%m-%d")
         end = _add_week(week)
         self.shifts = [s for s in self.shifts if s.date < week or s.date >= end] + shifts
 
@@ -113,6 +125,42 @@ class MockStore(AbstractStore):
 
     def get_waste(self, from_date: str, to_date: str) -> list[WasteFeedback]:
         return [w for w in self.waste if from_date <= w.date <= to_date]
+
+    def save_platform_revenue(self, revenue: PlatformRevenue) -> None:
+        self.platform_revenues.append(revenue)
+
+    def get_platform_revenues(self, date: str) -> list[PlatformRevenue]:
+        return [r for r in self.platform_revenues if r.date == date]
+
+    def save_daily_income(self, income: DailyIncome) -> None:
+        self.daily_income[income.date] = income
+
+    def get_daily_income(self, date: str) -> DailyIncome | None:
+        return self.daily_income.get(date)
+
+    def get_all_daily_income(self) -> list[DailyIncome]:
+        return list(self.daily_income.values())
+
+    def save_daily_expense(self, expense: DailyExpense) -> None:
+        self.daily_expense[expense.date] = expense
+
+    def get_daily_expense(self, date: str) -> DailyExpense | None:
+        return self.daily_expense.get(date)
+
+    def get_all_daily_expense(self) -> list[DailyExpense]:
+        return list(self.daily_expense.values())
+
+    def save_actual_consumption(self, consumption: ActualConsumption) -> None:
+        self.actual_consumptions.append(consumption)
+
+    def get_actual_consumptions(self, date: str) -> list[ActualConsumption]:
+        return [c for c in self.actual_consumptions if c.date == date]
+
+    def save_monthly_cost(self, cost: MonthlyFixedCost) -> None:
+        self.monthly_costs[cost.month] = cost
+
+    def get_monthly_cost(self, month: str) -> MonthlyFixedCost | None:
+        return self.monthly_costs.get(month)
 
 
 def _add_week(date_str: str) -> str:

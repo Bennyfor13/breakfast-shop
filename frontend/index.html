@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#ff6f00">
   <link rel="manifest" href="/manifest.json">
   <title>早餐店助手</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=22">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -15,18 +15,19 @@
     <nav id="tabs">
       <button data-tab="schedule">排班</button>
       <button data-tab="inventory">备料</button>
+      <button data-tab="accounting">记账</button>
       <button data-tab="pricing">定价</button>
-      <button data-tab="payroll">工资</button>
       <button data-tab="staff">员工</button>
       <button data-tab="menu">菜单</button>
     </nav>
   </header>
   <main id="content"></main>
-  <script src="/app.js"></script>
-  <script src="/components/schedule.js"></script>
-  <script src="/components/payroll.js"></script>
-  <script src="/components/inventory.js"></script>
-  <script src="/components/pricing.js"></script>
-  <script src="/components/menu.js"></script>
+  <script src="/components/schedule.js?v=22"></script>
+  <script src="/components/staff.js?v=22"></script>
+  <script src="/components/inventory.js?v=22"></script>
+  <script src="/components/accounting.js?v=22"></script>
+  <script src="/components/pricing.js?v=22"></script>
+  <script src="/components/menu.js?v=22"></script>
+  <script src="/app.js?v=22"></script>
 </body>
 </html>

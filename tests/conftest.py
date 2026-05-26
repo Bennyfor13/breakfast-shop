@@ -34,7 +34,7 @@ def store():
         bom=[Ingredient(name="黄豆", amount=30)]
     )
     s.demand_template.entries = {
-        "Monday-early": {"后厨": 2, "传菜": 1, "收银": 1},
-        "Monday-late": {"后厨": 1, "传菜": 1, "收银": 0},
+        "Monday-early": 4,
+        "Monday-late": 2,
     }
     return s

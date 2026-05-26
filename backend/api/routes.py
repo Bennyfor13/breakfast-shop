@@ -1,17 +1,18 @@
 from __future__ import annotations
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from backend.data.mock_store import MockStore
 from backend.data.models import (
-    Staff, Role, MenuItem, Ingredient, DemandTemplate,
+    Staff, Role, MenuItem, Ingredient, DemandTemplate, Schedule,
     AttendanceLog, PerformanceScore, IngredientStock, WasteFeedback,
 )
+from backend.auth import get_current_user
 from backend.modules.base_data import (
     create_staff, list_active_staff, update_staff, remove_staff,
     create_menu_item, list_active_menu, get_bom_for_item, remove_menu_item,
 )
 from backend.modules.scheduling import (
     generate_weekly_schedule, find_replacement,
-    edit_shift, assign_replacement,
+    edit_shift, assign_replacement, move_shift, set_cell_shifts,
 )
 from backend.modules.inventory import (
     forecast_ingredient_needs, generate_purchase_list,
@@ -30,14 +31,14 @@ def api_list_staff():
 
 
 @router.post("/staff")
-def api_create_staff(name: str, roles: list[str] = Query(...), morning_rate: float = 80, evening_rate: float = 60, note: str = ""):
+def api_create_staff(name: str, roles: list[str] = Query(...), morning_rate: float = 80, evening_rate: float = 60, note: str = "", user_id: str = Depends(get_current_user)):
     role_enums = [Role(r) for r in roles]
     staff = create_staff(store, None, name, role_enums, morning_rate, evening_rate, note)
     return staff.model_dump()
 
 
 @router.put("/staff/{staff_id}")
-def api_update_staff(staff_id: str, data: dict):
+def api_update_staff(staff_id: str, data: dict, user_id: str = Depends(get_current_user)):
     result = update_staff(store, staff_id, **data)
     if not result:
         raise HTTPException(404)
@@ -45,7 +46,7 @@ def api_update_staff(staff_id: str, data: dict):
 
 
 @router.delete("/staff/{staff_id}")
-def api_delete_staff(staff_id: str):
+def api_delete_staff(staff_id: str, user_id: str = Depends(get_current_user)):
     remove_staff(store, staff_id)
     return {"ok": True}
 
@@ -57,7 +58,7 @@ def api_list_menu():
 
 
 @router.post("/menu")
-def api_create_menu(name: str, price: float, bom: list[dict] = []):
+def api_create_menu(name: str, price: float, bom: list[dict] = [], user_id: str = Depends(get_current_user)):
     ingredients = [Ingredient(**i) for i in bom]
     item = create_menu_item(store, None, name, price, ingredients)
     return item.model_dump()
@@ -69,7 +70,7 @@ def api_get_bom(item_id: str):
 
 
 @router.delete("/menu/{item_id}")
-def api_delete_menu(item_id: str):
+def api_delete_menu(item_id: str, user_id: str = Depends(get_current_user)):
     remove_menu_item(store, item_id)
     return {"ok": True}
 
@@ -81,15 +82,74 @@ def api_get_demand():
 
 
 @router.put("/demand-template")
-def api_set_demand(data: dict):
+def api_set_demand(data: dict, user_id: str = Depends(get_current_user)):
     template = DemandTemplate(entries=data.get("entries", {}))
     store.set_demand_template(template)
     return {"ok": True}
 
 
 # -- Schedule --
+@router.get("/schedule/month")
+def api_get_month_schedule(year_month: str):
+    """Return all shifts for a month, auto-generating missing weeks."""
+    from calendar import monthrange
+    from backend.modules.payroll import _gen_week_starts
+    from backend.modules.scheduling import generate_weekly_schedule
+
+    year, month = int(year_month[:4]), int(year_month[5:7])
+    _, last_day = monthrange(year, month)
+    from_date = f"{year_month}-01"
+    to_date = f"{year_month}-{last_day:02d}"
+
+    all_shifts = []
+    for week_start in _gen_week_starts(from_date, to_date):
+        existing = store.get_shifts(week_start)
+        if existing:
+            all_shifts.extend(existing)
+        else:
+            schedule = generate_weekly_schedule(store, week_start)
+            store.save_shifts(schedule.shifts)
+            all_shifts.extend(schedule.shifts)
+
+    # Build per-person summary
+    staff_list = [s.model_dump() for s in store.list_staff()]
+    summary: dict[str, dict] = {}
+    for s in staff_list:
+        summary[s["id"]] = {
+            "staff_id": s["id"],
+            "staff_name": s["name"],
+            "morning_shifts": 0,
+            "evening_shifts": 0,
+            "morning_rate": s["morning_rate"],
+            "evening_rate": s["evening_rate"],
+        }
+    for shift in all_shifts:
+        if shift.staff_id in summary and from_date <= shift.date <= to_date:
+            if shift.period == "早班":
+                summary[shift.staff_id]["morning_shifts"] += 1
+            else:
+                summary[shift.staff_id]["evening_shifts"] += 1
+
+    for s in summary.values():
+        s["estimated_pay"] = (
+            s["morning_shifts"] * s["morning_rate"]
+            + s["evening_shifts"] * s["evening_rate"]
+        )
+
+    return {
+        "year_month": year_month,
+        "shifts": [s.model_dump() for s in all_shifts],
+        "summary": sorted(summary.values(), key=lambda x: x["staff_name"]),
+        "staff": staff_list,
+    }
+
+
 @router.get("/schedule")
-def api_get_schedule(week_start: str, boss_absent: str = ""):
+def api_get_schedule(week_start: str, boss_absent: str = "", regenerate: str = ""):
+    # Return saved shifts if they exist (preserves manual edits / substitutions)
+    existing = store.get_shifts(week_start)
+    if existing and regenerate.lower() != "true":
+        return Schedule(week_start=week_start, shifts=existing).model_dump()
     absent = set(boss_absent.split(",")) if boss_absent else set()
     schedule = generate_weekly_schedule(store, week_start, absent)
     store.save_shifts(schedule.shifts)
@@ -104,7 +164,7 @@ def api_find_replacement(absent_id: str, date: str):
 
 
 @router.post("/schedule/edit")
-def api_edit_shift(data: dict):
+def api_edit_shift(data: dict, user_id: str = Depends(get_current_user)):
     success = edit_shift(
         store, data["date"], data["period"],
         data["old_staff_id"], data["new_staff_id"],
@@ -114,8 +174,29 @@ def api_edit_shift(data: dict):
     return {"ok": True}
 
 
+@router.post("/schedule/cell")
+def api_set_cell(data: dict, user_id: str = Depends(get_current_user)):
+    shifts = set_cell_shifts(store, data["date"], data["period"], data.get("staff_ids", []))
+    return {"ok": True, "shifts": [s.model_dump() for s in shifts]}
+
+
+@router.post("/schedule/move")
+def api_move_shift(data: dict, user_id: str = Depends(get_current_user)):
+    success = move_shift(
+        store,
+        staff_id=data["staff_id"],
+        from_date=data["from_date"],
+        from_period=data["from_period"],
+        to_date=data["to_date"],
+        to_period=data["to_period"],
+    )
+    if not success:
+        raise HTTPException(404, "Source shift not found")
+    return {"ok": True}
+
+
 @router.post("/schedule/assign-replacement")
-def api_assign_replacement(data: dict):
+def api_assign_replacement(data: dict, user_id: str = Depends(get_current_user)):
     result = assign_replacement(
         store, data["absent_id"], data["date"],
         data.get("replacement_id"),
@@ -145,7 +226,7 @@ def api_forecast(sales: str = ""):
 
 
 @router.post("/waste")
-def api_save_waste(data: dict):
+def api_save_waste(data: dict, user_id: str = Depends(get_current_user)):
     fb = WasteFeedback(**data)
     store.save_waste(fb)
     return {"ok": True}
@@ -153,7 +234,7 @@ def api_save_waste(data: dict):
 
 # -- Attendance --
 @router.post("/attendance")
-def api_save_attendance(data: dict):
+def api_save_attendance(data: dict, user_id: str = Depends(get_current_user)):
     log = AttendanceLog(**data)
     store.save_attendance(log)
     return {"ok": True}
@@ -161,10 +242,78 @@ def api_save_attendance(data: dict):
 
 # -- Performance --
 @router.post("/performance")
-def api_save_performance(data: dict):
+def api_save_performance(data: dict, user_id: str = Depends(get_current_user)):
     score = PerformanceScore(**data)
     store.save_performance(score)
     return {"ok": True}
+
+
+# -- Accounting --
+@router.get("/accounting/monthly")
+def api_get_monthly_accounting(year_month: str):
+    from backend.modules.accounting import get_monthly_accounting
+    return get_monthly_accounting(store, year_month)
+
+
+@router.post("/accounting/fixed-costs")
+def api_save_fixed_costs(data: dict):
+    from backend.data.models import MonthlyFixedCost
+    cost = MonthlyFixedCost(
+        month=data["month"],
+        rent=data.get("rent", 0),
+        utilities=data.get("utilities", 0),
+        other=data.get("other", 0),
+    )
+    store.save_monthly_cost(cost)
+    return {"ok": True}
+
+
+@router.get("/accounting/fixed-costs")
+def api_get_fixed_costs(month: str):
+    cost = store.get_monthly_cost(month)
+    if cost:
+        return cost.model_dump()
+    return {"month": month, "rent": 0, "utilities": 0, "other": 0}
+
+
+@router.post("/accounting/income")
+def api_add_income(data: dict, user_id: str = Depends(get_current_user)):
+    from backend.modules.accounting import record_income
+    record_income(store, data["date"], data["income"])
+    return {"ok": True}
+
+
+@router.post("/accounting/expense")
+def api_add_expense(data: dict, user_id: str = Depends(get_current_user)):
+    from backend.modules.accounting import record_expense
+    record_expense(store, data["date"], data["expense"])
+    return {"ok": True}
+
+
+@router.get("/accounting/daily")
+def api_get_daily_accounting(date: str):
+    from backend.modules.accounting import get_daily_accounting
+    return get_daily_accounting(store, date)
+
+
+@router.get("/revenue")
+def api_get_revenue(date: str):
+    from backend.modules.accounting import get_daily_revenue
+    return get_daily_revenue(store, date)
+
+
+@router.post("/revenue")
+def api_add_revenue(data: dict, user_id: str = Depends(get_current_user)):
+    from backend.modules.accounting import record_platform_revenue
+    record_platform_revenue(store, data["date"], data["revenues"])
+    return {"ok": True}
+
+
+@router.get("/profit")
+def api_get_profit(date: str):
+    from backend.modules.daily_report import calculate_daily_profit
+    report = calculate_daily_profit(store, date)
+    return report.model_dump()
 
 
 # -- Pricing --

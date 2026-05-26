@@ -18,6 +18,14 @@ def seed(s: MockStore):
                       morning_rate=60, evening_rate=45, note="新人"))
     s.add_staff(Staff(id="s5", name="钱七", roles=[Role.CASHIER],
                       morning_rate=70, evening_rate=50))
+    s.add_staff(Staff(id="s6", name="孙八", roles=[Role.KITCHEN, Role.SERVICE],
+                      morning_rate=75, evening_rate=55))
+    s.add_staff(Staff(id="s7", name="周九", roles=[Role.KITCHEN],
+                      morning_rate=80, evening_rate=60, note="面点师傅"))
+    s.add_staff(Staff(id="s8", name="吴十", roles=[Role.SERVICE, Role.CASHIER],
+                      morning_rate=65, evening_rate=45, note="新人"))
+    s.add_staff(Staff(id="s9", name="郑一", roles=[Role.KITCHEN],
+                      morning_rate=70, evening_rate=50, note="学徒"))
 
     # Menu with BOMs
     s.add_menu_item(MenuItem(id="m1", name="鲜肉包", price=3.0, bom=[
@@ -42,22 +50,15 @@ def seed(s: MockStore):
         Ingredient(name="葱", amount=3), Ingredient(name="紫菜", amount=2),
     ]))
 
-    # Demand template
+    # Demand template — simple headcount per period
     s.set_demand_template(DemandTemplate(entries={
-        "Monday-early": {"后厨": 2, "传菜": 1, "收银": 1},
-        "Monday-late": {"后厨": 1, "传菜": 1, "收银": 0},
-        "Tuesday-early": {"后厨": 2, "传菜": 1, "收银": 1},
-        "Tuesday-late": {"后厨": 1, "传菜": 1, "收银": 0},
-        "Wednesday-early": {"后厨": 2, "传菜": 1, "收银": 1},
-        "Wednesday-late": {"后厨": 1, "传菜": 1, "收银": 0},
-        "Thursday-early": {"后厨": 2, "传菜": 1, "收银": 1},
-        "Thursday-late": {"后厨": 1, "传菜": 1, "收银": 0},
-        "Friday-early": {"后厨": 2, "传菜": 1, "收银": 1},
-        "Friday-late": {"后厨": 1, "传菜": 1, "收银": 0},
-        "Saturday-early": {"后厨": 2, "传菜": 1, "收银": 1},
-        "Saturday-late": {"后厨": 1, "传菜": 1, "收银": 1},
-        "Sunday-early": {"后厨": 1, "传菜": 1, "收银": 1},
-        "Sunday-late": {"后厨": 1, "传菜": 0, "收银": 0},
+        "Monday-early": 4, "Monday-late": 2,
+        "Tuesday-early": 4, "Tuesday-late": 2,
+        "Wednesday-early": 4, "Wednesday-late": 2,
+        "Thursday-early": 4, "Thursday-late": 2,
+        "Friday-early": 4, "Friday-late": 2,
+        "Saturday-early": 4, "Saturday-late": 3,
+        "Sunday-early": 3, "Sunday-late": 1,
     }))
 
     # Initial stock

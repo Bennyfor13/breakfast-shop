@@ -35,16 +35,16 @@ class MenuItem(BaseModel):
 
 
 class DemandTemplate(BaseModel):
-    """Boss fills this once per Phase 1. Key: "Monday-early", value: staff needed per role."""
-    entries: dict[str, dict[str, int]] = Field(default_factory=dict)
-    # e.g. {"Monday-early": {"后厨": 2, "传菜": 1, "收银": 1}}
+    """Key: "Monday-early", value: total staff needed for that period."""
+    entries: dict[str, int] = Field(default_factory=dict)
+    # e.g. {"Monday-early": 4, "Monday-late": 2}
 
 
 class Shift(BaseModel):
     staff_id: str
     date: str       # "2026-05-20"
     period: str     # "早班" | "晚班"
-    role: Role
+    role: Role | None = None
 
 
 class Schedule(BaseModel):
@@ -86,3 +86,54 @@ class WasteFeedback(BaseModel):
     date: str
     over_prepared: dict[str, float] = Field(default_factory=dict)
     under_prepared: dict[str, float] = Field(default_factory=dict)
+
+
+class PlatformRevenue(BaseModel):
+    """老板每日按平台录入的收入"""
+    date: str
+    platform: str
+    amount: float
+    note: str = ""
+
+
+class DailyIncome(BaseModel):
+    """每日收入记录"""
+    date: str
+    income: dict[str, float]  # {平台名: 金额}
+
+
+class DailyExpense(BaseModel):
+    """每日支出记录"""
+    date: str
+    expense: dict[str, float]  # {项目名: 金额}
+
+
+class DailyProfitReport(BaseModel):
+    """每日利润汇总"""
+    date: str
+    total_revenue: float
+    total_cost: float
+    net_profit: float
+    item_breakdown: list[dict]
+    ingredient_consumption: dict[str, float]
+
+
+class ActualConsumption(BaseModel):
+    """实际原料消耗 vs 理论消耗"""
+    date: str
+    ingredient_name: str
+    theoretical: float
+    actual: float
+    difference: float
+    note: str = ""
+
+
+class MonthlyFixedCost(BaseModel):
+    """月度固定成本配置"""
+    month: str
+    rent: float
+    utilities: float
+    other: float
+
+    def daily_cost(self, days_in_month: int = 30) -> float:
+        return (self.rent + self.utilities + self.other) / days_in_month

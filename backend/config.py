@@ -10,6 +10,7 @@ class Config:
     llm_api_url: str = "https://api.deepseek.com/v1"
     feishu_app_id: str = field(default_factory=lambda: os.getenv("FEISHU_APP_ID", ""))
     feishu_app_secret: str = field(default_factory=lambda: os.getenv("FEISHU_APP_SECRET", ""))
+    app_base_url: str = field(default_factory=lambda: os.getenv("APP_BASE_URL", "http://localhost:8000"))
 
     # Shift pricing defaults (configurable per staff)
     morning_shift_rate: float = 80.0

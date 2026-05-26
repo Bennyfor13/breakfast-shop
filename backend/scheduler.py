@@ -86,6 +86,8 @@ async def _push_morning_schedule(token_provider):
         content = "\n".join(lines)
 
     card = _build_push_card("今日排班", content)
+    from backend.bot.feishu import _add_app_link
+    card = _add_app_link(card, "打开排班看板", "schedule")
     await send_proactive_message(card, token)
 
 
@@ -109,6 +111,8 @@ async def _push_evening_reminder(token_provider):
         "- 「李四加班」"
     )
     card = _build_push_card("考勤提醒", content)
+    from backend.bot.feishu import _add_app_link
+    card = _add_app_link(card, "打开排班看板", "schedule")
     await send_proactive_message(card, token)
 
 
@@ -143,6 +147,8 @@ async def _push_monthly_payroll(token_provider):
         content = "\n".join(lines)
 
     card = _build_push_card("工资单", content)
+    from backend.bot.feishu import _add_app_link
+    card = _add_app_link(card, "查看工资明细", "payroll")
     await send_proactive_message(card, token)
 
 

@@ -4,33 +4,62 @@
 let schedData = null;   // current schedule data
 let staffMap = {};      // id → staff object
 let staffList = [];     // all staff
+let _cellShifts = {};   // cellId → [staff_id, ...]
+let _weekStart = null;  // currently displayed week (YYYY-MM-DD, Monday)
+let _viewMode = 'week'; // 'week' | 'month'
+let _monthYear = null;  // YYYY-MM for month view
 
-async function renderSchedule(el) {
-  const weekStart = getMonday(new Date());
+async function renderSchedule(el, weekStart) {
+  if (weekStart) _weekStart = weekStart;
+  if (!_weekStart) _weekStart = getMonday(new Date());
+  if (!_monthYear) _monthYear = _weekStart.slice(0, 7);
+
+  if (_viewMode === 'month') {
+    return renderMonthView(el);
+  }
+  return renderWeekView(el);
+}
+
+// ═══════════════════════════════════════════════
+//  Week View
+// ═══════════════════════════════════════════════
+
+async function renderWeekView(el) {
   try {
     [schedData, staffList] = await Promise.all([
-      fetchJSON(`${API}/schedule?week_start=${weekStart}`),
+      fetchJSON(`${API}/schedule?week_start=${_weekStart}`),
       fetchJSON(`${API}/staff`)
     ]);
     staffMap = {};
     staffList.forEach(s => { staffMap[s.id] = s; });
 
     const today = getToday();
-    const byKey = {};  // "2026-05-19|早班" → [{staff_id, role}, ...]
+    const byKey = {};
     schedData.shifts.forEach(s => {
       const key = `${s.date}|${s.period}`;
       if (!byKey[key]) byKey[key] = [];
       byKey[key].push(s);
     });
 
-    let html = `<h2>本周排班 (${weekStart})</h2>`;
+    // View toggle + week navigation
+    const prevWeek = _offsetWeek(_weekStart, -1);
+    const nextWeek = _offsetWeek(_weekStart, 1);
+    let html = `<div class="week-nav">
+      <button class="btn btn-sm btn-outline" onclick="navigateWeek('${prevWeek}')">◀ 上一周</button>
+      <span class="week-label">${_weekStart} 周</span>
+      <button class="btn btn-sm btn-outline" onclick="navigateWeek('${nextWeek}')">下一周 ▶</button>
+    </div>`;
+    html += `<div class="view-toggle">
+      <button class="btn btn-sm btn-outline active">周</button>
+      <button class="btn btn-sm btn-outline" onclick="switchToMonth()">月</button>
+    </div>`;
 
     // Calendar grid
     html += '<div class="card" style="overflow-x:auto">';
     html += '<div class="sched-grid">';
     html += '<div class="sched-header"></div>';
     for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart);
+      const d = new Date(_weekStart);
       d.setDate(d.getDate() + i);
       const dateStr = d.toISOString().slice(0, 10);
       const dayNames = ['日','一','二','三','四','五','六'];
@@ -40,230 +69,318 @@ async function renderSchedule(el) {
     for (const period of ['早班', '晚班']) {
       html += `<div class="sched-label">${period}</div>`;
       for (let i = 0; i < 7; i++) {
-        const d = new Date(weekStart);
+        const d = new Date(_weekStart);
         d.setDate(d.getDate() + i);
         const dateStr = d.toISOString().slice(0, 10);
         const key = `${dateStr}|${period}`;
         const shifts = byKey[key] || [];
         const cellId = `cell-${dateStr}-${period}`;
+        _cellShifts[cellId] = shifts.map(s => s.staff_id);
         if (shifts.length > 0) {
-          const names = shifts.map(s => {
+          const chips = shifts.map(s => {
             const staff = staffMap[s.staff_id];
-            return staff ? `<span style="background:${staffColor(staff.id)};color:#fff;padding:1px 4px;border-radius:3px;margin:1px;display:inline-block;font-size:10px">${staff.name}(${s.role})</span>` : s.staff_id;
-          }).join('<br>');
-          html += `<div class="sched-cell" id="${cellId}" onclick="openShiftEdit('${dateStr}','${period}',${JSON.stringify(shifts.map(s => ({staff_id:s.staff_id,role:s.role})))})">${names}</div>`;
+            const name = staff ? staff.name : s.staff_id;
+            return `<span class="staff-chip" title="${name}"
+              style="background:${staffColor(s.staff_id)};color:#fff;padding:2px 5px;border-radius:3px;margin:1px;display:inline-block;font-size:11px;white-space:nowrap"
+              >${name}</span>`;
+          }).join('');
+          html += `<div class="sched-cell" id="${cellId}" onclick="showEditPanel('${cellId}')">${chips}</div>`;
         } else {
-          html += `<div class="sched-cell sched-empty" id="${cellId}">—</div>`;
+          html += `<div class="sched-cell sched-empty" id="${cellId}" onclick="showEditPanel('${cellId}')">—</div>`;
         }
       }
     }
     html += '</div></div>';
 
-    // Weekly stats
-    html += '<div class="card"><h3>本周统计</h3><div class="chart-wrap"><canvas id="shiftChart"></canvas></div></div>';
+    // Edit panel
+    html += `<div class="card" id="edit-panel">
+      <h3>修改排班</h3>
+      <p id="edit-title" style="color:var(--muted);font-size:13px;margin-bottom:12px">点击上方格子选择要编辑的日期和时段</p>
+      <div id="edit-rows"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-sm" onclick="saveEdit()">保存</button>
+      </div>
+    </div>`;
 
-    // Attendance quick-mark
-    html += '<div class="card"><h3>今日考勤 (快速标记)</h3>';
-    html += '<div class="form-group"><label>日期</label><input id="att-date" type="date" value="' + today + '"></div>';
-    html += '<div class="form-group"><label>缺勤</label>';
-    staffList.forEach(s => {
-      html += `<label class="cb-label"><input type="checkbox" value="${s.id}" class="att-absent" onchange="onAbsentChange()"> ${s.name}</label>`;
-    });
-    html += '</div>';
-    html += '<div id="replacement-hints" style="font-size:12px;color:var(--primary);margin-bottom:8px"></div>';
-    html += '<div class="form-group"><label>替班 (格式: 缺勤者→替班者，如 张三→李四)</label><input id="att-sub" placeholder="可选"></div>';
-    html += '<div class="form-group"><label>加班</label>';
-    staffList.forEach(s => {
-      html += `<label class="cb-label"><input type="checkbox" value="${s.id}" class="att-overtime"> ${s.name}</label>`;
-    });
-    html += '</div>';
-    html += '<button class="btn" onclick="handleSaveAttendance()">保存考勤</button>';
-    html += '</div>';
+    // Monthly chart
+    const yearMonth = _weekStart.slice(0, 7);
+    html += '<div class="card"><h3>本月出勤统计</h3><div class="chart-wrap"><canvas id="shiftChart"></canvas></div></div>';
 
     el.innerHTML = html;
-
-    // Draw weekly shift distribution chart
-    renderShiftChart(byKey, weekStart);
+    renderMonthlyChart(yearMonth);
 
   } catch(e) {
     el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p><p>请先确认服务器已启动并运行种子数据。</p></div>`;
   }
 }
 
+// ═══════════════════════════════════════════════
+//  Month View
+// ═══════════════════════════════════════════════
+
+async function renderMonthView(el) {
+  try {
+    const data = await fetchJSON(`${API}/schedule/month?year_month=${_monthYear}`);
+
+    // Build lookup: date → {早班: [names], 晚班: [names]}
+    const staffLookup = {};
+    (data.staff || []).forEach(s => { staffLookup[s.id] = s.name; });
+
+    const byDate = {};
+    (data.shifts || []).forEach(s => {
+      if (!byDate[s.date]) byDate[s.date] = { '早班': [], '晚班': [] };
+      const name = staffLookup[s.staff_id] || s.staff_id;
+      byDate[s.date][s.period].push(name);
+    });
+
+    // Month navigation
+    const [y, m] = _monthYear.split('-').map(Number);
+    const prevMonth = m === 1 ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
+    const nextMonth = m === 12 ? `${y+1}-01` : `${y}-${String(m+1).padStart(2,'0')}`;
+
+    let html = `<div class="week-nav">
+      <button class="btn btn-sm btn-outline" onclick="navigateMonth('${prevMonth}')">◀ 上月</button>
+      <span class="week-label">${y}年${m}月</span>
+      <button class="btn btn-sm btn-outline" onclick="navigateMonth('${nextMonth}')">下月 ▶</button>
+    </div>`;
+    html += `<div class="view-toggle">
+      <button class="btn btn-sm btn-outline" onclick="switchToWeek()">周</button>
+      <button class="btn btn-sm btn-outline active">月</button>
+    </div>`;
+
+    // Month calendar grid
+    const firstDay = new Date(y, m-1, 1);
+    const lastDay = new Date(y, m, 0);
+    const daysInMonth = lastDay.getDate();
+    // Day of week: 0=Sun, 1=Mon, ... 6=Sat → we want Mon=0
+    const startDow = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    const today = getToday();
+
+    html += '<div class="card" style="overflow-x:auto">';
+    html += '<div class="month-grid">';
+    // Header
+    for (const d of ['一','二','三','四','五','六','日']) {
+      html += `<div class="month-header">${d}</div>`;
+    }
+    // Cells
+    let cellIdx = 0;
+    const totalCells = startDow + daysInMonth;
+    const rows = Math.ceil(totalCells / 7);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < 7; c++) {
+        const dayNum = cellIdx - startDow + 1;
+        if (dayNum < 1 || dayNum > daysInMonth) {
+          html += '<div class="month-cell month-empty"></div>';
+        } else {
+          const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+          const shifts = byDate[dateStr] || { '早班': [], '晚班': [] };
+          const morningCount = shifts['早班'].length;
+          const eveningCount = shifts['晚班'].length;
+          const isToday = dateStr === today;
+          const dayOfWeek = new Date(y, m-1, dayNum).getDay();
+          const isSunday = dayOfWeek === 0;
+
+          let cellClass = 'month-cell';
+          if (isToday) cellClass += ' month-today';
+          if (isSunday) cellClass += ' month-sunday';
+
+          html += `<div class="${cellClass}" onclick="goToWeek('${dateStr}')">
+            <div class="month-daynum">${dayNum}</div>
+            <div class="month-period">早 ${morningCount}人</div>
+            <div class="month-period">晚 ${eveningCount}人</div>
+          </div>`;
+        }
+        cellIdx++;
+      }
+    }
+    html += '</div></div>';
+
+    // Monthly summary table
+    const summary = data.summary || [];
+    if (summary.length > 0) {
+      let totalMorning = 0, totalEvening = 0, totalPay = 0;
+      html += '<div class="card"><h3>本月汇总</h3>';
+      html += '<div style="overflow-x:auto"><table><thead><tr>';
+      html += '<th>员工</th><th>早班</th><th>晚班</th><th>预计工资</th>';
+      html += '</tr></thead><tbody>';
+      summary.forEach(s => {
+        totalMorning += s.morning_shifts;
+        totalEvening += s.evening_shifts;
+        totalPay += s.estimated_pay;
+        html += `<tr>
+          <td>${s.staff_name}</td>
+          <td>${s.morning_shifts}</td>
+          <td>${s.evening_shifts}</td>
+          <td>¥${s.estimated_pay}</td>
+        </tr>`;
+      });
+      html += `<tr style="font-weight:700;border-top:2px solid var(--primary)">
+        <td>合计</td><td>${totalMorning}</td><td>${totalEvening}</td><td>¥${totalPay}</td>
+      </tr>`;
+      html += '</tbody></table></div></div>';
+    }
+
+    el.innerHTML = html;
+
+  } catch(e) {
+    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
+  }
+}
+
+function switchToMonth() {
+  _viewMode = 'month';
+  _monthYear = _weekStart.slice(0, 7);
+  loadTab('schedule');
+}
+
+function switchToWeek() {
+  _viewMode = 'week';
+  // Derive week start from current month view
+  if (_monthYear) {
+    const now = new Date();
+    const curYm = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    if (_monthYear === curYm) {
+      _weekStart = getMonday(new Date());
+    } else {
+      const [y, m] = _monthYear.split('-').map(Number);
+      _weekStart = getMonday(new Date(y, m-1, 1));
+    }
+  }
+  loadTab('schedule');
+}
+
+function navigateMonth(yearMonth) {
+  _monthYear = yearMonth;
+  _viewMode = 'month';
+  // Also set _weekStart to first Monday of month for consistency
+  const [y, m] = yearMonth.split('-').map(Number);
+  _weekStart = getMonday(new Date(y, m-1, 1));
+  _cellShifts = {};
+  loadTab('schedule');
+}
+
+function goToWeek(dateStr) {
+  const d = new Date(dateStr);
+  _weekStart = getMonday(d);
+  _monthYear = dateStr.slice(0, 7);
+  _viewMode = 'week';
+  _cellShifts = {};
+  loadTab('schedule');
+}
+
+// ═══════════════════════════════════════════════
+//  Shared helpers
+// ═══════════════════════════════════════════════
+
+function navigateWeek(weekStart) {
+  _viewMode = 'week';
+  _cellShifts = {};
+  loadTab('schedule', weekStart);
+}
+
+function _offsetWeek(weekStart, delta) {
+  const d = new Date(weekStart);
+  d.setDate(d.getDate() + delta * 7);
+  return d.toISOString().slice(0, 10);
+}
+
 function staffColor(id) {
-  const colors = ['#1976d2','#388e3c','#e64a19','#7b1fa2','#c2185b','#00796b','#f57c00'];
+  const colors = ['#1976d2','#388e3c','#e64a19','#7b1fa2','#c2185b','#00796b','#f57c00','#795548','#607d8b'];
   const idx = (id || '').charCodeAt(0) || 0;
   return colors[idx % colors.length];
 }
 
-function renderShiftChart(byKey, weekStart) {
+async function renderMonthlyChart(yearMonth) {
   const canvas = document.getElementById('shiftChart');
   if (!canvas) return;
   if (canvas._chartInstance) canvas._chartInstance.destroy();
 
-  const counts = {};
-  staffList.forEach(s => { counts[s.name] = 0; });
-  Object.values(byKey).forEach(shifts => {
-    shifts.forEach(s => {
-      const staff = staffMap[s.staff_id];
-      if (staff) counts[staff.name] = (counts[staff.name] || 0) + 1;
-    });
-  });
+  try {
+    const payroll = await fetchJSON(`${API}/payroll?year_month=${yearMonth}`);
+    const labels = payroll.map(p => p.staff_name);
+    const morning = payroll.map(p => p.morning_shifts);
+    const evening = payroll.map(p => p.evening_shifts);
 
-  canvas._chartInstance = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels: Object.keys(counts),
-      datasets: [{ label: '本周班次', data: Object.values(counts), backgroundColor: '#ff6f00' }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { ticks: { stepSize: 1, font: { size: 11 } } },
-        x: { ticks: { font: { size: 11 } } },
+    canvas._chartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: '早班', data: morning, backgroundColor: '#ff6f00' },
+          { label: '晚班', data: evening, backgroundColor: '#ffab40' },
+        ],
       },
-    },
-  });
-}
-
-function onAbsentChange() {
-  const absentIds = [...document.querySelectorAll('.att-absent:checked')].map(cb => cb.value);
-  const hintsDiv = document.getElementById('replacement-hints');
-  if (!hintsDiv || absentIds.length === 0) {
-    if (hintsDiv) hintsDiv.innerHTML = '';
-    return;
-  }
-  // Find candidates for each absent staff
-  let hintsHtml = '';
-  absentIds.forEach(id => {
-    const absentStaff = staffMap[id];
-    if (!absentStaff) return;
-    const candidates = staffList.filter(s => {
-      if (s.id === id) return false;
-      return absentStaff.roles.some(r => s.roles.includes(r));
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+        scales: {
+          x: { stacked: true, ticks: { font: { size: 11 } } },
+          y: { stacked: true, ticks: { stepSize: 2, font: { size: 11 } } },
+        },
+      },
     });
-    if (candidates.length > 0) {
-      hintsHtml += `<div style="margin:4px 0">${absentStaff.name}缺勤 → 推荐替班：${candidates.map(c => c.name).join(' / ')}</div>`;
-    } else {
-      hintsHtml += `<div style="margin:4px 0;color:var(--danger)">${absentStaff.name}缺勤 → 无合适替班人选</div>`;
-    }
-  });
-  hintsDiv.innerHTML = hintsHtml;
+  } catch(e) {
+    canvas._chartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: { labels: [], datasets: [] },
+      options: { responsive: true, maintainAspectRatio: false },
+    });
+  }
 }
 
-async function handleSaveAttendance() {
-  const date = document.getElementById('att-date').value;
-  const absent = [...document.querySelectorAll('.att-absent:checked')].map(cb => cb.value);
-  const overtime = [...document.querySelectorAll('.att-overtime:checked')].map(cb => cb.value);
-  const subRaw = document.getElementById('att-sub').value.trim();
+// ═══════════════════════════════════════════════
+//  Edit panel
+// ═══════════════════════════════════════════════
 
-  const substitute = {};
-  if (subRaw) {
-    for (const pair of subRaw.split(/[,，\s]+/)) {
-      const parts = pair.split(/[→→>]/);
-      if (parts.length === 2) {
-        const fromStaff = staffList.find(s => s.name === parts[0].trim());
-        const toStaff = staffList.find(s => s.name === parts[1].trim());
-        if (fromStaff && toStaff) substitute[fromStaff.id] = toStaff.id;
-      }
-    }
-  }
+let _editingCell = null;
+
+function showEditPanel(cellId) {
+  _editingCell = cellId;
+  const rest = cellId.substring(5);
+  const dashIdx = rest.lastIndexOf('-');
+  const date = rest.substring(0, dashIdx);
+  const period = rest.substring(dashIdx + 1);
+  const existingIds = new Set(_cellShifts[cellId] || []);
+
+  document.getElementById('edit-title').textContent = `${date} ${dayName(date)} ${period}`;
+
+  let rowsHtml = '';
+  staffList.forEach(st => {
+    const checked = existingIds.has(st.id) ? 'checked' : '';
+    rowsHtml += `<div class="edit-row">
+      <label class="cb-label">
+        <input type="checkbox" class="edit-check" data-staff="${st.id}" ${checked}>
+        ${st.name}
+      </label>
+    </div>`;
+  });
+  document.getElementById('edit-rows').innerHTML = rowsHtml;
+  document.getElementById('edit-panel').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function saveEdit() {
+  if (!_editingCell) return;
+  const rest = _editingCell.substring(5);
+  const dashIdx = rest.lastIndexOf('-');
+  const date = rest.substring(0, dashIdx);
+  const period = rest.substring(dashIdx + 1);
+
+  const checks = document.querySelectorAll('.edit-check:checked');
+  const staffIds = Array.from(checks).map(cb => cb.dataset.staff);
 
   try {
-    const res = await fetch(`${API}/attendance`, {
+    const res = await fetch(`${API}/schedule/cell`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, absent, substitute, overtime }),
+      body: JSON.stringify({ date, period, staff_ids: staffIds }),
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.detail || '请求失败'); }
-    showToast('考勤已保存');
+    _cellShifts = {};
+    showToast('排班已更新');
+    _editingCell = null;
+    loadTab(currentTab, _weekStart);
   } catch (e) {
     showToast('保存失败: ' + e.message);
   }
-}
-
-async function openShiftEdit(date, period, shifts) {
-  // Remove any existing modal
-  const old = document.querySelector('.modal-overlay');
-  if (old) old.remove();
-
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `<div class="modal-box">
-    <h3>编辑 ${date} ${period}</h3>
-    <div id="edit-shifts-list"></div>
-    <button class="btn btn-sm" id="add-shift-btn">➕ 添加员工</button>
-    <div style="margin-top:12px;text-align:right">
-      <button class="btn btn-sm btn-outline" onclick="document.querySelector('.modal-overlay').remove()">关闭</button>
-    </div>
-  </div>`;
-  document.body.appendChild(overlay);
-
-  const listDiv = overlay.querySelector('#edit-shifts-list');
-  shifts.forEach((s, idx) => {
-    const staff = staffMap[s.staff_id];
-    listDiv.innerHTML += `<div style="margin:4px 0;display:flex;align-items:center;gap:8px">
-      <span style="flex:1">${staff ? staff.name : s.staff_id} (${s.role})</span>
-      <select class="edit-role-select" style="width:80px">
-        <option value="后厨" ${s.role==='后厨'?'selected':''}>后厨</option>
-        <option value="传菜" ${s.role==='传菜'?'selected':''}>传菜</option>
-        <option value="收银" ${s.role==='收银'?'selected':''}>收银</option>
-      </select>
-      <select class="edit-staff-select" style="width:100px">
-        ${staffList.map(st => `<option value="${st.id}" ${st.id===s.staff_id?'selected':''}>${st.name}</option>`).join('')}
-      </select>
-      <button class="btn btn-sm" style="background:var(--danger);font-size:11px;padding:2px 6px" onclick="this.closest('div').remove();">✕</button>
-    </div>`;
-  });
-
-  overlay.querySelector('#add-shift-btn').onclick = () => {
-    listDiv.innerHTML += `<div style="margin:4px 0;display:flex;align-items:center;gap:8px">
-      <select class="edit-staff-select" style="width:100px">${staffList.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select>
-      <select class="edit-role-select" style="width:80px"><option>后厨</option><option>传菜</option><option>收银</option></select>
-      <button class="btn btn-sm" style="background:var(--danger);font-size:11px;padding:2px 6px" onclick="this.closest('div').remove();">✕</button>
-    </div>`;
-  };
-
-  // Save button
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'btn';
-  saveBtn.textContent = '保存更改';
-  saveBtn.style.marginRight = '8px';
-  saveBtn.onclick = async () => {
-    const rows = listDiv.querySelectorAll('div[style]');
-    const newShifts = [];
-    rows.forEach(row => {
-      const staffSelect = row.querySelector('.edit-staff-select');
-      const roleSelect = row.querySelector('.edit-role-select');
-      if (staffSelect && roleSelect) {
-        newShifts.push({ staff_id: staffSelect.value, role: roleSelect.value });
-      }
-    });
-
-    try {
-      // For each original position, update if staff changed
-      for (let i = 0; i < Math.min(shifts.length, newShifts.length); i++) {
-        if (shifts[i].staff_id !== newShifts[i].staff_id) {
-          const res = await fetch(`${API}/schedule/edit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              date, period,
-              old_staff_id: shifts[i].staff_id,
-              new_staff_id: newShifts[i].staff_id,
-            }),
-          });
-          if (!res.ok) { const e = await res.json(); throw new Error(e.detail || '请求失败'); }
-        }
-      }
-      showToast('排班已更新');
-      document.querySelector('.modal-overlay').remove();
-      loadTab(currentTab);
-    } catch (e) {
-      showToast('保存失败: ' + e.message);
-    }
-  };
-  overlay.querySelector('.modal-box').insertBefore(saveBtn, overlay.querySelector('.modal-box').lastElementChild);
 }

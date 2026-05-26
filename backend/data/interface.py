@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from backend.data.models import (
     Staff, MenuItem, DemandTemplate, Shift, AttendanceLog,
     PerformanceScore, IngredientStock, SalesRecord, WasteFeedback,
+    PlatformRevenue, ActualConsumption, MonthlyFixedCost,
 )
 
 
@@ -80,3 +81,21 @@ class AbstractStore(ABC):
     def save_waste(self, feedback: WasteFeedback) -> None: ...
     @abstractmethod
     def get_waste(self, from_date: str, to_date: str) -> list[WasteFeedback]: ...
+
+    # -- Platform Revenue --
+    @abstractmethod
+    def save_platform_revenue(self, revenue: PlatformRevenue) -> None: ...
+    @abstractmethod
+    def get_platform_revenues(self, date: str) -> list[PlatformRevenue]: ...
+
+    # -- Actual Consumption --
+    @abstractmethod
+    def save_actual_consumption(self, consumption: ActualConsumption) -> None: ...
+    @abstractmethod
+    def get_actual_consumptions(self, date: str) -> list[ActualConsumption]: ...
+
+    # -- Monthly Fixed Cost --
+    @abstractmethod
+    def save_monthly_cost(self, cost: MonthlyFixedCost) -> None: ...
+    @abstractmethod
+    def get_monthly_cost(self, month: str) -> MonthlyFixedCost | None: ...
