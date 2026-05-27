@@ -53,13 +53,52 @@ async function renderStaffList() {
             ${s.note ? `<p style="font-size:12px;color:var(--muted)">${s.note}</p>` : ''}
           </div>
           <div style="display:flex;gap:4px">
-            <button class="btn btn-sm btn-outline" onclick="editStaff('${s.id}')">编辑</button>
+            <button class="btn btn-sm btn-outline" onclick="showEditStaffModal('${s.id}')">编辑</button>
             <button class="btn btn-sm" style="background:var(--danger);font-size:11px;padding:2px 8px" onclick="deleteStaff('${s.id}')">删除</button>
           </div>
         </div>
       </div>`;
     });
+
+    // Edit modal
+    html += `
+      <div id="edit-staff-modal" class="modal" style="display:none" onclick="closeModalOnBackdropStaff(event)">
+        <div class="modal-content-enhanced" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h3>编辑员工</h3>
+            <button class="modal-close" onclick="closeEditStaffModal()">×</button>
+          </div>
+          <form id="edit-staff-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>姓名</label>
+                <input type="text" id="edit-staff-name" placeholder="姓名">
+              </div>
+              <div class="form-group">
+                <label>早班工资</label>
+                <input type="number" id="edit-staff-morning" step="1" placeholder="80">
+              </div>
+              <div class="form-group">
+                <label>晚班工资</label>
+                <input type="number" id="edit-staff-evening" step="1" placeholder="60">
+              </div>
+              <div class="form-group">
+                <label>备注</label>
+                <input type="text" id="edit-staff-note" placeholder="可选">
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline" onclick="closeEditStaffModal()">取消</button>
+              <button type="submit" class="btn">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+
     el.innerHTML = html;
+
+    // Bind submit
+    document.getElementById('edit-staff-form').addEventListener('submit', handleEditStaffSubmit);
   } catch(e) {
     el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
   }
@@ -118,25 +157,48 @@ async function renderStaffPayroll() {
   }
 }
 
-async function editStaff(id) {
+let editingStaffId = null;
+
+async function showEditStaffModal(id) {
+  editingStaffId = id;
   const staff = await fetchJSON(`${API}/staff`);
   const s = staff.find(p => p.id === id);
   if (!s) return;
 
-  const name = prompt('姓名', s.name);
-  if (!name) return;
-  const morning = prompt('早班工资', s.morning_rate) || s.morning_rate;
-  const evening = prompt('晚班工资', s.evening_rate) || s.evening_rate;
-  const note = prompt('备注', s.note || '') || '';
+  document.getElementById('edit-staff-name').value = s.name;
+  document.getElementById('edit-staff-morning').value = s.morning_rate;
+  document.getElementById('edit-staff-evening').value = s.evening_rate;
+  document.getElementById('edit-staff-note').value = s.note || '';
+  document.getElementById('edit-staff-modal').style.display = 'flex';
+}
+
+function closeEditStaffModal() {
+  document.getElementById('edit-staff-modal').style.display = 'none';
+  editingStaffId = null;
+}
+
+function closeModalOnBackdropStaff(event) {
+  if (event.target.id === 'edit-staff-modal') closeEditStaffModal();
+}
+
+async function handleEditStaffSubmit(e) {
+  e.preventDefault();
+  if (!editingStaffId) return;
+  const name = document.getElementById('edit-staff-name').value.trim();
+  if (!name) { showToast('请输入姓名'); return; }
+  const morning = parseFloat(document.getElementById('edit-staff-morning').value) || 80;
+  const evening = parseFloat(document.getElementById('edit-staff-evening').value) || 60;
+  const note = document.getElementById('edit-staff-note').value.trim() || '';
 
   try {
-    const res = await fetch(`${API}/staff/${id}`, {
+    const res = await fetch(`${API}/staff/${editingStaffId}`, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name, morning_rate: parseFloat(morning), evening_rate: parseFloat(evening), note}),
+      body: JSON.stringify({name, morning_rate: morning, evening_rate: evening, note}),
     });
     if (!res.ok) throw new Error('更新失败');
     showToast('员工已更新');
+    closeEditStaffModal();
     loadTab(currentTab);
   } catch(e) {
     showToast('更新失败: ' + e.message);
