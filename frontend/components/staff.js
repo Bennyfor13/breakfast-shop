@@ -45,10 +45,19 @@ async function renderStaffList() {
     html += `</div>`;
 
     data.forEach(s => {
-      html += `<div class="card"><h3>${s.name}</h3>`;
-      html += `<p>角色: ${s.roles.join(' / ')} | 早班 ¥${s.morning_rate} / 晚班 ¥${s.evening_rate}</p>`;
-      if (s.note) html += `<p style="font-size:12px;color:var(--muted)">${s.note}</p>`;
-      html += '</div>';
+      html += `<div class="card" id="staff-card-${s.id}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <h3>${s.name}</h3>
+            <p>角色: ${s.roles.join(' / ')} | 早班 ¥${s.morning_rate} / 晚班 ¥${s.evening_rate}</p>
+            ${s.note ? `<p style="font-size:12px;color:var(--muted)">${s.note}</p>` : ''}
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-sm btn-outline" onclick="editStaff('${s.id}')">编辑</button>
+            <button class="btn btn-sm" style="background:var(--danger);font-size:11px;padding:2px 8px" onclick="deleteStaff('${s.id}')">删除</button>
+          </div>
+        </div>
+      </div>`;
     });
     el.innerHTML = html;
   } catch(e) {
@@ -106,6 +115,43 @@ async function renderStaffPayroll() {
     el.innerHTML = html;
   } catch(e) {
     el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
+  }
+}
+
+async function editStaff(id) {
+  const staff = await fetchJSON(`${API}/staff`);
+  const s = staff.find(p => p.id === id);
+  if (!s) return;
+
+  const name = prompt('姓名', s.name);
+  if (!name) return;
+  const morning = prompt('早班工资', s.morning_rate) || s.morning_rate;
+  const evening = prompt('晚班工资', s.evening_rate) || s.evening_rate;
+  const note = prompt('备注', s.note || '') || '';
+
+  try {
+    const res = await fetch(`${API}/staff/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, morning_rate: parseFloat(morning), evening_rate: parseFloat(evening), note}),
+    });
+    if (!res.ok) throw new Error('更新失败');
+    showToast('员工已更新');
+    loadTab(currentTab);
+  } catch(e) {
+    showToast('更新失败: ' + e.message);
+  }
+}
+
+async function deleteStaff(id) {
+  if (!confirm('确定要删除该员工吗？')) return;
+  try {
+    const res = await fetch(`${API}/staff/${id}`, {method: 'DELETE'});
+    if (!res.ok) throw new Error('删除失败');
+    showToast('员工已删除');
+    loadTab(currentTab);
+  } catch(e) {
+    showToast('删除失败: ' + e.message);
   }
 }
 
