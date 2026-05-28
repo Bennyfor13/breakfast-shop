@@ -21,7 +21,7 @@ from backend.modules.pricing import analyze_all_items
 from backend.modules.payroll import generate_monthly_payroll
 
 router = APIRouter(prefix="/api")
-store = MockStore()
+store = MockStore.load_or_create()
 
 
 # -- Staff --
