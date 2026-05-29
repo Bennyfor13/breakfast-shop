@@ -64,7 +64,7 @@ def _build_push_card(title: str, content: str) -> dict:
 
 
 async def _push_morning_schedule(token_provider):
-    """06:00 — Today's schedule + prep reminders."""
+    """04:30 — Today's schedule push."""
     if not _store or not _boss_chat_id:
         return
     token = await token_provider()
@@ -76,13 +76,11 @@ async def _push_morning_schedule(token_provider):
     else:
         by_period: dict[str, list[str]] = {}
         for s in shifts:
-            by_period.setdefault(s.period, []).append(s.staff_id)
+            by_period.setdefault(s.period, []).append(_get_staff_name(s.staff_id))
         lines = [f"## {today} 排班", ""]
         for period in ["早班", "晚班"]:
             names = by_period.get(period, ["—"])
-            lines.append(f"**{period}**: {', '.join(names)}")
-        lines.append("")
-        lines.append("请检查排班，如需调整请回复。")
+            lines.append(f"**{period}**: {'、'.join(names)}")
         content = "\n".join(lines)
 
     card = _build_push_card("今日排班", content)
@@ -91,28 +89,44 @@ async def _push_morning_schedule(token_provider):
     await send_proactive_message(card, token)
 
 
-async def _push_evening_reminder(token_provider):
-    """20:00 — Attendance marking reminder."""
+async def _push_evening_accounting(token_provider):
+    """20:00 — Today's accounting summary."""
     if not _store or not _boss_chat_id:
         return
     token = await token_provider()
     today = date.today().strftime("%Y-%m-%d")
-    existing = _store.get_attendance(today)
 
-    absent_list = "、".join(existing.absent) if existing and existing.absent else "无"
-    overtime_list = "、".join(existing.overtime) if existing and existing.overtime else "无"
+    income_record = _store.get_daily_income(today)
+    expense_record = _store.get_daily_expense(today)
 
-    content = (
-        f"## 考勤标记提醒 ({today})\n\n"
-        f"今日缺勤: {absent_list}\n"
-        f"今日加班: {overtime_list}\n\n"
-        "如有变动请回复标记，例如：\n"
-        "- 「张三请假」\n"
-        "- 「李四加班」"
-    )
-    card = _build_push_card("考勤提醒", content)
+    income = income_record.income if income_record else {}
+    expense = expense_record.expense if expense_record else {}
+    total_income = sum(income.values())
+    total_expense = sum(expense.values())
+    net = total_income - total_expense
+
+    lines = [f"## {today} 收支日报", ""]
+    if total_income > 0 or total_expense > 0:
+        if income:
+            lines.append("**收入**")
+            for k, v in sorted(income.items(), key=lambda x: -x[1]):
+                lines.append(f"- {k}: ¥{v:.0f}")
+            lines.append("")
+        if expense:
+            lines.append("**支出**")
+            for k, v in sorted(expense.items(), key=lambda x: -x[1]):
+                lines.append(f"- {k}: ¥{v:.0f}")
+            lines.append("")
+        lines.append(f"---\n**净利润: ¥{net:.0f}**")
+    else:
+        lines.append("今日暂无记账记录。")
+        lines.append("")
+        lines.append("如需记账请回复或点击下方按钮。")
+
+    content = "\n".join(lines)
+    card = _build_push_card("收支日报", content)
     from backend.bot.feishu import _add_app_link
-    card = _add_app_link(card, "打开排班看板", "schedule")
+    card = _add_app_link(card, "打开记账", "accounting")
     await send_proactive_message(card, token)
 
 
@@ -152,18 +166,26 @@ async def _push_monthly_payroll(token_provider):
     await send_proactive_message(card, token)
 
 
+def _get_staff_name(staff_id: str) -> str:
+    if _store:
+        s = _store.get_staff(staff_id)
+        if s:
+            return s.name
+    return staff_id
+
+
 def _schedule_jobs(token_provider):
     """Register all scheduled jobs."""
-    # Morning schedule push at 06:07
+    # Morning schedule push at 04:30
     scheduler.add_job(
-        _push_morning_schedule, "cron", hour=6, minute=7,
+        _push_morning_schedule, "cron", hour=4, minute=30,
         args=[token_provider], id="morning_schedule",
         replace_existing=True,
     )
-    # Evening reminder at 20:07
+    # Evening accounting push at 20:00
     scheduler.add_job(
-        _push_evening_reminder, "cron", hour=20, minute=7,
-        args=[token_provider], id="evening_reminder",
+        _push_evening_accounting, "cron", hour=20, minute=0,
+        args=[token_provider], id="evening_accounting",
         replace_existing=True,
     )
     # Monthly payroll on 1st at 09:07
