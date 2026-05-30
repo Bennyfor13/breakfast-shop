@@ -174,9 +174,20 @@ def api_edit_shift(data: dict, user_id: str = Depends(get_current_user)):
     return {"ok": True}
 
 
+@router.post("/payroll/bonus")
+def api_set_bonus(data: dict, user_id: str = Depends(get_current_user)):
+    from backend.modules.payroll import set_monthly_bonus
+    set_monthly_bonus(store, data["staff_id"], data["year_month"], data.get("bonus", 0))
+    return {"ok": True}
+
+
 @router.post("/schedule/cell")
 def api_set_cell(data: dict, user_id: str = Depends(get_current_user)):
-    shifts = set_cell_shifts(store, data["date"], data["period"], data.get("staff_ids", []))
+    # Support both new format (staff_shifts) and old format (staff_ids)
+    staff_shifts = data.get("staff_shifts")
+    if staff_shifts is None:
+        staff_shifts = [{"staff_id": sid, "hours": 11} for sid in data.get("staff_ids", [])]
+    shifts = set_cell_shifts(store, data["date"], data["period"], staff_shifts)
     return {"ok": True, "shifts": [s.model_dump() for s in shifts]}
 
 

@@ -49,7 +49,7 @@ async function renderStaffList() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
             <h3>${s.name}</h3>
-            <p>角色: ${s.roles.join(' / ')} | 早班 ¥${s.morning_rate} / 晚班 ¥${s.evening_rate}</p>
+            <p>角色: ${s.roles.join(' / ')} | 时薪 ¥${s.hourly_wage || 15}/h | 全天 ${s.full_day_hours || 11}h</p>
             ${s.note ? `<p style="font-size:12px;color:var(--muted)">${s.note}</p>` : ''}
           </div>
           <div style="display:flex;gap:4px">
@@ -75,12 +75,12 @@ async function renderStaffList() {
                 <input type="text" id="edit-staff-name" placeholder="姓名">
               </div>
               <div class="form-group">
-                <label>早班工资</label>
-                <input type="number" id="edit-staff-morning" step="1" placeholder="80">
+                <label>时薪（元/小时）</label>
+                <input type="number" id="edit-staff-hourly" step="0.5" placeholder="15">
               </div>
               <div class="form-group">
-                <label>晚班工资</label>
-                <input type="number" id="edit-staff-evening" step="1" placeholder="60">
+                <label>全天工时（小时）</label>
+                <input type="number" id="edit-staff-fullday" step="0.5" placeholder="11">
               </div>
               <div class="form-group">
                 <label>备注</label>
@@ -135,18 +135,21 @@ async function renderStaffPayroll() {
     html += '</div>';
 
     html += '<div class="card"><h3>明细</h3><table><thead><tr>';
-    html += '<th>姓名</th><th>早班</th><th>晚班</th><th>加班</th><th>绩效</th><th>基础</th><th>奖金</th><th>合计</th>';
+    html += '<th>姓名</th><th>工时(h)</th><th>时薪</th><th>底薪</th><th>奖金</th><th>合计</th>';
     html += '</tr></thead><tbody>';
     data.forEach(p => {
       html += `<tr>`;
       html += `<td><strong>${p.staff_name}</strong></td>`;
-      html += `<td>${p.morning_shifts}×¥${p.morning_rate}</td>`;
-      html += `<td>${p.evening_shifts}×¥${p.evening_rate}</td>`;
-      html += `<td>${p.overtime_shifts || 0}</td>`;
-      html += `<td>${p.performance_score}分</td>`;
-      html += `<td>¥${p.base_pay.toFixed(0)}</td>`;
-      html += `<td>¥${p.performance_bonus.toFixed(0)}</td>`;
-      html += `<td><strong>¥${p.total.toFixed(0)}</strong></td>`;
+      html += `<td>${(p.total_hours || 0).toFixed(1)}</td>`;
+      html += `<td>¥${p.hourly_wage || 15}</td>`;
+      html += `<td>¥${(p.base_pay || 0).toFixed(0)}</td>`;
+      html += `<td>
+        <input type="number" class="bonus-input" data-staff="${p.staff_id || ''}" data-ym="${ym}"
+          value="${(p.bonus || 0).toFixed(0)}" step="50" min="0"
+          style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;text-align:right;font-size:13px"
+          onchange="saveBonus(this)">
+      </td>`;
+      html += `<td><strong>¥${(p.total || 0).toFixed(0)}</strong></td>`;
       html += `</tr>`;
     });
     html += '</tbody></table></div>';
@@ -166,8 +169,8 @@ async function showEditStaffModal(id) {
   if (!s) return;
 
   document.getElementById('edit-staff-name').value = s.name;
-  document.getElementById('edit-staff-morning').value = s.morning_rate;
-  document.getElementById('edit-staff-evening').value = s.evening_rate;
+  document.getElementById('edit-staff-hourly').value = s.hourly_wage || 15;
+  document.getElementById('edit-staff-fullday').value = s.full_day_hours || 11;
   document.getElementById('edit-staff-note').value = s.note || '';
   document.getElementById('edit-staff-modal').style.display = 'flex';
 }
@@ -186,15 +189,15 @@ async function handleEditStaffSubmit(e) {
   if (!editingStaffId) return;
   const name = document.getElementById('edit-staff-name').value.trim();
   if (!name) { showToast('请输入姓名'); return; }
-  const morning = parseFloat(document.getElementById('edit-staff-morning').value) || 80;
-  const evening = parseFloat(document.getElementById('edit-staff-evening').value) || 60;
+  const hourly = parseFloat(document.getElementById('edit-staff-hourly').value) || 15;
+  const fullday = parseFloat(document.getElementById('edit-staff-fullday').value) || 11;
   const note = document.getElementById('edit-staff-note').value.trim() || '';
 
   try {
     const res = await fetch(`${API}/staff/${editingStaffId}`, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name, morning_rate: morning, evening_rate: evening, note}),
+      body: JSON.stringify({name, hourly_wage: hourly, full_day_hours: fullday, note}),
     });
     if (!res.ok) throw new Error('更新失败');
     showToast('员工已更新');
@@ -214,6 +217,21 @@ async function deleteStaff(id) {
     loadTab(currentTab);
   } catch(e) {
     showToast('删除失败: ' + e.message);
+  }
+}
+
+async function saveBonus(input) {
+  const staffId = input.dataset.staff;
+  const yearMonth = input.dataset.ym;
+  const bonus = parseFloat(input.value) || 0;
+  try {
+    await fetch('/api/payroll/bonus', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({staff_id: staffId, year_month: yearMonth, bonus}),
+    });
+  } catch(e) {
+    showToast('保存奖金失败');
   }
 }
 

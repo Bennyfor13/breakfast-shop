@@ -45,6 +45,7 @@ class MockStore(AbstractStore):
         self.monthly_costs: dict[str, MonthlyFixedCost] = {}
         self.daily_income: dict[str, DailyIncome] = {}
         self.daily_expense: dict[str, DailyExpense] = {}
+        self.staff_bonus: dict[str, float] = {}  # key: "staff_id|year_month"
 
     @classmethod
     def load_or_create(cls) -> MockStore:
@@ -68,6 +69,7 @@ class MockStore(AbstractStore):
                 store.monthly_costs = _dict_to_models(raw.get("monthly_costs", {}), MonthlyFixedCost, is_dict=True)
                 store.daily_income = _dict_to_models(raw.get("daily_income", {}), DailyIncome, is_dict=True)
                 store.daily_expense = _dict_to_models(raw.get("daily_expense", {}), DailyExpense, is_dict=True)
+                store.staff_bonus = raw.get("staff_bonus", {})
             except Exception as e:
                 print(f"Failed to load data file, starting fresh: {e}")
         return store
@@ -89,6 +91,7 @@ class MockStore(AbstractStore):
             "monthly_costs": _models_to_dict(self.monthly_costs),
             "daily_income": _models_to_dict(self.daily_income),
             "daily_expense": _models_to_dict(self.daily_expense),
+            "staff_bonus": self.staff_bonus,
         }
         _DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
         _DATA_FILE.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -247,6 +250,13 @@ class MockStore(AbstractStore):
 
     def get_monthly_cost(self, month: str) -> MonthlyFixedCost | None:
         return self.monthly_costs.get(month)
+
+    def set_staff_bonus(self, staff_id: str, year_month: str, bonus: float) -> None:
+        self.staff_bonus[f"{staff_id}|{year_month}"] = bonus
+        self._save()
+
+    def get_staff_bonus(self, staff_id: str, year_month: str) -> float:
+        return self.staff_bonus.get(f"{staff_id}|{year_month}", 0)
 
 
 def _add_week(date_str: str) -> str:

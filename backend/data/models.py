@@ -18,6 +18,8 @@ class Staff(BaseModel):
     morning_rate: float = 80.0
     evening_rate: float = 60.0
     active: bool = True
+    hourly_wage: float = 15.0
+    full_day_hours: float = 11.0
 
 
 class Ingredient(BaseModel):
@@ -45,6 +47,7 @@ class Shift(BaseModel):
     date: str       # "2026-05-20"
     period: str     # "早班" | "晚班"
     role: Role | None = None
+    hours: float = 11.0  # 上班小时数，默认全天
 
 
 class Schedule(BaseModel):

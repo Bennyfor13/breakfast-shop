@@ -100,9 +100,10 @@ def assign_replacement(
 
 def set_cell_shifts(
     store: AbstractStore, date: str, period: str,
-    staff_ids: list[str],
+    staff_shifts: list[dict],
 ) -> list[Shift]:
-    """Replace all shifts for a date+period with the given staff_ids."""
+    """Replace all shifts for a date+period with the given staff_shifts.
+    Each item: {"staff_id": str, "hours": float}"""
     from datetime import datetime, timedelta
 
     dt = datetime.strptime(date, "%Y-%m-%d")
@@ -113,8 +114,10 @@ def set_cell_shifts(
     kept = [s for s in all_shifts if not (s.date == date and s.period == period)]
 
     new_shifts = []
-    for sid in staff_ids:
-        shift = Shift(staff_id=sid, date=date, period=period)
+    for item in staff_shifts:
+        sid = item["staff_id"]
+        hours = item.get("hours", 11)
+        shift = Shift(staff_id=sid, date=date, period=period, hours=hours)
         kept.append(shift)
         new_shifts.append(shift)
 

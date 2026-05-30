@@ -80,6 +80,7 @@ async function renderWeekView(el) {
           const chips = shifts.map(s => {
             const staff = staffMap[s.staff_id];
             const name = staff ? staff.name : s.staff_id;
+            const hours = s.hours || (staff ? staff.full_day_hours || 11 : 11);
             return `<span class="staff-chip" title="${name}"
               style="background:${staffColor(s.staff_id)};color:#fff;padding:2px 5px;border-radius:3px;margin:1px;display:inline-block;font-size:11px;white-space:nowrap"
               >${name}</span>`;
@@ -348,11 +349,16 @@ function showEditPanel(cellId) {
   let rowsHtml = '';
   staffList.forEach(st => {
     const checked = existingIds.has(st.id) ? 'checked' : '';
+    const defaultHours = st.full_day_hours || 11;
     rowsHtml += `<div class="edit-row">
-      <label class="cb-label">
+      <label class="cb-label" style="flex:1">
         <input type="checkbox" class="edit-check" data-staff="${st.id}" ${checked}>
         ${st.name}
       </label>
+      <input type="number" class="edit-hours" data-staff="${st.id}" value="${defaultHours}"
+        min="0" max="24" step="0.5"
+        style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:13px">
+      <span style="font-size:11px;color:var(--muted);margin-left:2px">h</span>
     </div>`;
   });
   document.getElementById('edit-rows').innerHTML = rowsHtml;
@@ -367,13 +373,17 @@ async function saveEdit() {
   const period = rest.substring(dashIdx + 1);
 
   const checks = document.querySelectorAll('.edit-check:checked');
-  const staffIds = Array.from(checks).map(cb => cb.dataset.staff);
+  const staffShifts = Array.from(checks).map(cb => {
+    const hoursInput = document.querySelector(`.edit-hours[data-staff="${cb.dataset.staff}"]`);
+    const hours = hoursInput ? parseFloat(hoursInput.value) || 11 : 11;
+    return { staff_id: cb.dataset.staff, hours };
+  });
 
   try {
     const res = await fetch(`${API}/schedule/cell`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, period, staff_ids: staffIds }),
+      body: JSON.stringify({ date, period, staff_shifts: staffShifts }),
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.detail || '请求失败'); }
     _cellShifts = {};
