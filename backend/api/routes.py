@@ -111,30 +111,29 @@ def api_get_month_schedule(year_month: str):
             store.save_shifts(schedule.shifts)
             all_shifts.extend(schedule.shifts)
 
-    # Build per-person summary
+    # Build per-person summary (hours-based)
     staff_list = [s.model_dump() for s in store.list_staff()]
     summary: dict[str, dict] = {}
     for s in staff_list:
         summary[s["id"]] = {
             "staff_id": s["id"],
             "staff_name": s["name"],
-            "morning_shifts": 0,
-            "evening_shifts": 0,
-            "morning_rate": s["morning_rate"],
-            "evening_rate": s["evening_rate"],
+            "days_worked": 0,
+            "total_hours": 0.0,
+            "hourly_wage": s.get("hourly_wage", 15),
         }
+    seen_dates: dict[str, set] = {}
     for shift in all_shifts:
         if shift.staff_id in summary and from_date <= shift.date <= to_date:
-            if shift.period == "早班":
-                summary[shift.staff_id]["morning_shifts"] += 1
-            else:
-                summary[shift.staff_id]["evening_shifts"] += 1
+            summary[shift.staff_id]["total_hours"] += shift.hours or 11
+            if shift.staff_id not in seen_dates:
+                seen_dates[shift.staff_id] = set()
+            if shift.date not in seen_dates[shift.staff_id]:
+                seen_dates[shift.staff_id].add(shift.date)
+                summary[shift.staff_id]["days_worked"] += 1
 
     for s in summary.values():
-        s["estimated_pay"] = (
-            s["morning_shifts"] * s["morning_rate"]
-            + s["evening_shifts"] * s["evening_rate"]
-        )
+        s["estimated_pay"] = round(s["total_hours"] * s["hourly_wage"], 1)
 
     return {
         "year_month": year_month,
@@ -188,6 +187,13 @@ def api_set_cell(data: dict, user_id: str = Depends(get_current_user)):
     if staff_shifts is None:
         staff_shifts = [{"staff_id": sid, "hours": 11} for sid in data.get("staff_ids", [])]
     shifts = set_cell_shifts(store, data["date"], data["period"], staff_shifts)
+    return {"ok": True, "shifts": [s.model_dump() for s in shifts]}
+
+
+@router.post("/schedule/day")
+def api_set_day(data: dict, user_id: str = Depends(get_current_user)):
+    from backend.modules.scheduling import set_day_shifts
+    shifts = set_day_shifts(store, data["date"], data.get("staff_shifts", []))
     return {"ok": True, "shifts": [s.model_dump() for s in shifts]}
 
 

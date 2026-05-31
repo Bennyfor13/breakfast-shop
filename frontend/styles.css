@@ -127,13 +127,78 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
 .stat-card .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
 /* Schedule calendar grid */
-.sched-grid { display: grid; grid-template-columns: 50px repeat(7, 1fr); gap: 2px; font-size: 11px; }
+.sched-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); gap: 2px; font-size: 11px; }
 .sched-grid > div { padding: 6px 4px; background: var(--card); border-radius: 4px; text-align: center; min-height: 36px; cursor: default; }
 .sched-grid .sched-header { background: var(--primary); color: #fff; font-weight: 600; }
 .sched-grid .sched-label { background: var(--primary-light); font-weight: 600; color: var(--primary); }
 .sched-grid .sched-cell { cursor: pointer; }
 .sched-grid .sched-cell:hover { background: var(--primary-light); }
 .sched-grid .sched-empty { color: var(--muted); }
+.sched-staff-label {
+  background: var(--primary-light);
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+.sched-rest { color: var(--muted); font-size: 12px; }
+.sched-full { color: var(--good); font-weight: 600; font-size: 12px; }
+.sched-partial { color: var(--primary); font-weight: 600; font-size: 12px; }
+
+/* Schedule modal rows */
+.sched-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sched-modal-name {
+  flex: 0 0 60px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+.sched-modal-quick {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.quick-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text);
+}
+.quick-btn:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.quick-btn:active {
+  background: var(--primary);
+  color: #fff;
+}
+.sched-modal-input {
+  width: 55px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+  background: var(--bg);
+}
+.sched-modal-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
 /* Custom platform rows */
 .custom-platform-row {
   display: flex;

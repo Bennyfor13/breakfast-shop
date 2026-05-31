@@ -125,6 +125,31 @@ def set_cell_shifts(
     return new_shifts
 
 
+def set_day_shifts(
+    store: AbstractStore, date: str,
+    staff_shifts: list[dict],
+) -> list[Shift]:
+    """Replace ALL shifts for a single date. Each item: {"staff_id": str, "hours": float}
+    Period defaults to "早班" for backward compat."""
+    from datetime import datetime, timedelta
+    dt = datetime.strptime(date, "%Y-%m-%d")
+    monday = dt - timedelta(days=dt.weekday())
+    week_start = monday.strftime("%Y-%m-%d")
+    all_shifts = store.get_shifts(week_start)
+
+    kept = [s for s in all_shifts if s.date != date]
+    new_shifts = []
+    for item in staff_shifts:
+        sid = item["staff_id"]
+        hours = item.get("hours", 11)
+        shift = Shift(staff_id=sid, date=date, period="早班", hours=hours)
+        kept.append(shift)
+        new_shifts.append(shift)
+
+    store.save_shifts(kept)
+    return new_shifts
+
+
 def move_shift(
     store: AbstractStore, staff_id: str,
     from_date: str, from_period: str,

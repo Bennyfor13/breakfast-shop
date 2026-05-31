@@ -1,27 +1,24 @@
 // Schedule Dashboard Component
 // Depends on: Chart.js, fetchJSON(), showToast(), loadTab(), currentTab
 
-let schedData = null;   // current schedule data
-let staffMap = {};      // id → staff object
-let staffList = [];     // all staff
-let _cellShifts = {};   // cellId → [staff_id, ...]
-let _weekStart = null;  // currently displayed week (YYYY-MM-DD, Monday)
-let _viewMode = 'week'; // 'week' | 'month'
-let _monthYear = null;  // YYYY-MM for month view
+let schedData = null;
+let staffMap = {};
+let staffList = [];
+let _weekStart = null;
+let _viewMode = 'week';
+let _monthYear = null;
+let _editingDate = null;
 
 async function renderSchedule(el, weekStart) {
   if (weekStart) _weekStart = weekStart;
   if (!_weekStart) _weekStart = getMonday(new Date());
   if (!_monthYear) _monthYear = _weekStart.slice(0, 7);
-
-  if (_viewMode === 'month') {
-    return renderMonthView(el);
-  }
+  if (_viewMode === 'month') return renderMonthView(el);
   return renderWeekView(el);
 }
 
 // ═══════════════════════════════════════════════
-//  Week View
+//  Week View — Staff × Days grid
 // ═══════════════════════════════════════════════
 
 async function renderWeekView(el) {
@@ -34,14 +31,13 @@ async function renderWeekView(el) {
     staffList.forEach(s => { staffMap[s.id] = s; });
 
     const today = getToday();
-    const byKey = {};
+    const byStaff = {};
     schedData.shifts.forEach(s => {
-      const key = `${s.date}|${s.period}`;
-      if (!byKey[key]) byKey[key] = [];
-      byKey[key].push(s);
+      if (!byStaff[s.staff_id]) byStaff[s.staff_id] = {};
+      const hours = s.hours || (staffMap[s.staff_id] ? staffMap[s.staff_id].full_day_hours || 11 : 11);
+      byStaff[s.staff_id][s.date] = (byStaff[s.staff_id][s.date] || 0) + hours;
     });
 
-    // View toggle + week navigation
     const prevWeek = _offsetWeek(_weekStart, -1);
     const nextWeek = _offsetWeek(_weekStart, 1);
     let html = `<div class="week-nav">
@@ -54,9 +50,11 @@ async function renderWeekView(el) {
       <button class="btn btn-sm btn-outline" onclick="switchToMonth()">月</button>
     </div>`;
 
-    // Calendar grid
+    // Staff × Days grid
     html += '<div class="card" style="overflow-x:auto">';
     html += '<div class="sched-grid">';
+
+    // Header row
     html += '<div class="sched-header"></div>';
     for (let i = 0; i < 7; i++) {
       const d = new Date(_weekStart);
@@ -64,55 +62,145 @@ async function renderWeekView(el) {
       const dateStr = d.toISOString().slice(0, 10);
       const dayNames = ['日','一','二','三','四','五','六'];
       const isToday = dateStr === today;
-      html += `<div class="sched-header" style="${isToday ? 'background:#388e3c;' : ''}">${dateStr.slice(5)}<br>周${dayNames[d.getDay()]}</div>`;
+      html += `<div class="sched-header" style="${isToday ? 'background:#388e3c;' : ''};cursor:pointer" onclick="openDayEditModal('${dateStr}')">
+        ${dateStr.slice(5)}<br>周${dayNames[d.getDay()]}</div>`;
     }
-    for (const period of ['早班', '晚班']) {
-      html += `<div class="sched-label">${period}</div>`;
+
+    // One row per staff
+    staffList.forEach(st => {
+      html += `<div class="sched-staff-label" title="${st.name}">${st.name}</div>`;
       for (let i = 0; i < 7; i++) {
         const d = new Date(_weekStart);
         d.setDate(d.getDate() + i);
         const dateStr = d.toISOString().slice(0, 10);
-        const key = `${dateStr}|${period}`;
-        const shifts = byKey[key] || [];
-        const cellId = `cell-${dateStr}-${period}`;
-        _cellShifts[cellId] = shifts.map(s => s.staff_id);
-        if (shifts.length > 0) {
-          const chips = shifts.map(s => {
-            const staff = staffMap[s.staff_id];
-            const name = staff ? staff.name : s.staff_id;
-            const hours = s.hours || (staff ? staff.full_day_hours || 11 : 11);
-            const hoursLabel = hours >= (staff ? staff.full_day_hours || 11 : 11) ? '全天' : `${hours}h`;
-            return `<span class="staff-chip" title="${name} ${hoursLabel}"
-              style="background:${staffColor(s.staff_id)};color:#fff;padding:2px 5px;border-radius:3px;margin:1px;display:inline-block;font-size:11px;white-space:nowrap"
-              >${name} ${hoursLabel}</span>`;
-          }).join('');
-          html += `<div class="sched-cell" id="${cellId}" onclick="showEditPanel('${cellId}')">${chips}</div>`;
-        } else {
-          html += `<div class="sched-cell sched-empty" id="${cellId}" onclick="showEditPanel('${cellId}')">—</div>`;
-        }
+        const totalHours = (byStaff[st.id] && byStaff[st.id][dateStr]) || 0;
+        const fullDay = st.full_day_hours || 11;
+
+        let display, cls;
+        if (totalHours <= 0) { display = '—'; cls = 'sched-rest'; }
+        else if (totalHours >= fullDay) { display = '全天'; cls = 'sched-full'; }
+        else { display = totalHours + 'h'; cls = 'sched-partial'; }
+
+        html += `<div class="sched-cell ${cls}" onclick="openDayEditModal('${dateStr}')">${display}</div>`;
       }
-    }
+    });
     html += '</div></div>';
 
-    // Edit panel
-    html += `<div class="card" id="edit-panel">
-      <h3>修改排班</h3>
-      <p id="edit-title" style="color:var(--muted);font-size:13px;margin-bottom:12px">点击上方格子选择要编辑的日期和时段</p>
-      <div id="edit-rows"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-        <button class="btn btn-sm" onclick="saveEdit()">保存</button>
-      </div>
-    </div>`;
+    // Day edit modal
+    html += `
+      <div id="sched-day-modal" class="modal" style="display:none" onclick="closeModalOnBackdropSched(event)">
+        <div class="modal-content-enhanced" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h3 id="sched-modal-title">编辑排班</h3>
+            <button class="modal-close" onclick="closeDayEditSched()">×</button>
+          </div>
+          <form id="sched-day-form">
+            <div id="sched-modal-rows" style="max-height:50vh;overflow-y:auto"></div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline" onclick="closeDayEditSched()">取消</button>
+              <button type="submit" class="btn">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
 
-    // Monthly chart
+    // Chart
     const yearMonth = _weekStart.slice(0, 7);
-    html += '<div class="card"><h3>本月出勤统计</h3><div class="chart-wrap"><canvas id="shiftChart"></canvas></div></div>';
+    html += '<div class="card"><h3>本月工时统计</h3><div class="chart-wrap"><canvas id="shiftChart"></canvas></div></div>';
 
     el.innerHTML = html;
     renderMonthlyChart(yearMonth);
+    document.getElementById('sched-day-form').addEventListener('submit', saveDayEditSched);
 
   } catch(e) {
-    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p><p>请先确认服务器已启动并运行种子数据。</p></div>`;
+    el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  Day Edit Modal
+// ═══════════════════════════════════════════════
+
+function dayName(dateStr) {
+  const names = ['日','一','二','三','四','五','六'];
+  return '周' + names[new Date(dateStr).getDay()];
+}
+
+function openDayEditModal(dateStr) {
+  _editingDate = dateStr;
+  document.getElementById('sched-modal-title').textContent = `${dateStr} ${dayName(dateStr)} 排班`;
+
+  // Get current hours for each staff on this date
+  const currentHours = {};
+  schedData.shifts.forEach(s => {
+    if (s.date === dateStr) {
+      const h = s.hours || (staffMap[s.staff_id] ? staffMap[s.staff_id].full_day_hours || 11 : 11);
+      currentHours[s.staff_id] = (currentHours[s.staff_id] || 0) + h;
+    }
+  });
+
+  const container = document.getElementById('sched-modal-rows');
+  container.innerHTML = '';
+  staffList.forEach(st => {
+    const val = currentHours[st.id] || 0;
+    const fd = st.full_day_hours || 11;
+    const row = document.createElement('div');
+    row.className = 'sched-modal-row';
+    row.innerHTML = `
+      <span class="sched-modal-name">${st.name}</span>
+      <div class="sched-modal-quick">
+        <button type="button" class="quick-btn" onclick="setHours(this, ${fd})">全天</button>
+        <button type="button" class="quick-btn" onclick="setHours(this, 6)">6h</button>
+        <button type="button" class="quick-btn" onclick="setHours(this, 5)">5h</button>
+        <button type="button" class="quick-btn" onclick="setHours(this, 4)">4h</button>
+        <button type="button" class="quick-btn" onclick="setHours(this, 0)">休</button>
+      </div>
+      <input type="number" class="sched-modal-input" data-staff="${st.id}"
+        value="${val}" min="0" max="24" step="0.5">
+      <span style="font-size:12px;color:var(--muted);width:16px">h</span>
+    `;
+    container.appendChild(row);
+  });
+  document.getElementById('sched-day-modal').style.display = 'flex';
+}
+
+function setHours(btn, val) {
+  const input = btn.closest('.sched-modal-row').querySelector('.sched-modal-input');
+  input.value = val;
+}
+
+function closeDayEditSched() {
+  document.getElementById('sched-day-modal').style.display = 'none';
+  _editingDate = null;
+}
+
+function closeModalOnBackdropSched(event) {
+  if (event.target.id === 'sched-day-modal') closeDayEditSched();
+}
+
+async function saveDayEditSched(e) {
+  e.preventDefault();
+  if (!_editingDate) return;
+
+  const inputs = document.querySelectorAll('.sched-modal-input');
+  const staffShifts = [];
+  inputs.forEach(inp => {
+    const hours = parseFloat(inp.value) || 0;
+    if (hours > 0) staffShifts.push({ staff_id: inp.dataset.staff, hours });
+  });
+
+  try {
+    const res = await fetch(`${API}/schedule/day`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: _editingDate, staff_shifts: staffShifts }),
+    });
+    if (!res.ok) throw new Error('保存失败');
+    showToast('排班已更新');
+    closeDayEditSched();
+    loadTab(currentTab, _weekStart);
+  } catch(e) {
+    showToast('保存失败: ' + e.message);
   }
 }
 
@@ -124,18 +212,16 @@ async function renderMonthView(el) {
   try {
     const data = await fetchJSON(`${API}/schedule/month?year_month=${_monthYear}`);
 
-    // Build lookup: date → {早班: [names], 晚班: [names]}
+    // Build per-date staff set
     const staffLookup = {};
     (data.staff || []).forEach(s => { staffLookup[s.id] = s.name; });
 
     const byDate = {};
     (data.shifts || []).forEach(s => {
-      if (!byDate[s.date]) byDate[s.date] = { '早班': [], '晚班': [] };
-      const name = staffLookup[s.staff_id] || s.staff_id;
-      byDate[s.date][s.period].push(name);
+      if (!byDate[s.date]) byDate[s.date] = new Set();
+      byDate[s.date].add(s.staff_id);
     });
 
-    // Month navigation
     const [y, m] = _monthYear.split('-').map(Number);
     const prevMonth = m === 1 ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
     const nextMonth = m === 12 ? `${y+1}-01` : `${y}-${String(m+1).padStart(2,'0')}`;
@@ -150,21 +236,17 @@ async function renderMonthView(el) {
       <button class="btn btn-sm btn-outline active">月</button>
     </div>`;
 
-    // Month calendar grid
-    const firstDay = new Date(y, m-1, 1);
-    const lastDay = new Date(y, m, 0);
-    const daysInMonth = lastDay.getDate();
-    // Day of week: 0=Sun, 1=Mon, ... 6=Sat → we want Mon=0
-    const startDow = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
-    const today = getToday();
-
     html += '<div class="card" style="overflow-x:auto">';
     html += '<div class="month-grid">';
-    // Header
     for (const d of ['一','二','三','四','五','六','日']) {
       html += `<div class="month-header">${d}</div>`;
     }
-    // Cells
+    const firstDay = new Date(y, m-1, 1);
+    const lastDay = new Date(y, m, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDow = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    const today = getToday();
+
     let cellIdx = 0;
     const totalCells = startDow + daysInMonth;
     const rows = Math.ceil(totalCells / 7);
@@ -175,21 +257,17 @@ async function renderMonthView(el) {
           html += '<div class="month-cell month-empty"></div>';
         } else {
           const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
-          const shifts = byDate[dateStr] || { '早班': [], '晚班': [] };
-          const morningCount = shifts['早班'].length;
-          const eveningCount = shifts['晚班'].length;
+          const count = byDate[dateStr] ? byDate[dateStr].size : 0;
           const isToday = dateStr === today;
           const dayOfWeek = new Date(y, m-1, dayNum).getDay();
-          const isSunday = dayOfWeek === 0;
 
           let cellClass = 'month-cell';
           if (isToday) cellClass += ' month-today';
-          if (isSunday) cellClass += ' month-sunday';
+          if (dayOfWeek === 0) cellClass += ' month-sunday';
 
           html += `<div class="${cellClass}" onclick="goToWeek('${dateStr}')">
             <div class="month-daynum">${dayNum}</div>
-            <div class="month-period">早 ${morningCount}人</div>
-            <div class="month-period">晚 ${eveningCount}人</div>
+            <div class="month-period">共 ${count} 人</div>
           </div>`;
         }
         cellIdx++;
@@ -197,100 +275,60 @@ async function renderMonthView(el) {
     }
     html += '</div></div>';
 
-    // Monthly summary table
-    const summary = data.summary || [];
-    if (summary.length > 0) {
-      let totalMorning = 0, totalEvening = 0, totalPay = 0;
+    // Summary table
+    if (data.summary && data.summary.length > 0) {
+      let totalDays = 0, totalHours = 0, totalPay = 0;
       html += '<div class="card"><h3>本月汇总</h3>';
       html += '<div style="overflow-x:auto"><table><thead><tr>';
-      html += '<th>员工</th><th>早班</th><th>晚班</th><th>预计工资</th>';
+      html += '<th>员工</th><th>出勤</th><th>总工时</th><th>预计工资</th>';
       html += '</tr></thead><tbody>';
-      summary.forEach(s => {
-        totalMorning += s.morning_shifts;
-        totalEvening += s.evening_shifts;
+      data.summary.forEach(s => {
+        totalDays += s.days_worked;
+        totalHours += s.total_hours;
         totalPay += s.estimated_pay;
         html += `<tr>
           <td>${s.staff_name}</td>
-          <td>${s.morning_shifts}</td>
-          <td>${s.evening_shifts}</td>
+          <td>${s.days_worked}天</td>
+          <td>${s.total_hours.toFixed(1)}h</td>
           <td>¥${s.estimated_pay}</td>
         </tr>`;
       });
       html += `<tr style="font-weight:700;border-top:2px solid var(--primary)">
-        <td>合计</td><td>${totalMorning}</td><td>${totalEvening}</td><td>¥${totalPay}</td>
+        <td>合计</td><td>${totalDays}</td><td>${totalHours.toFixed(1)}h</td><td>¥${totalPay}</td>
       </tr>`;
       html += '</tbody></table></div></div>';
     }
 
     el.innerHTML = html;
-
   } catch(e) {
     el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
   }
 }
 
-function switchToMonth() {
-  _viewMode = 'month';
-  _monthYear = _weekStart.slice(0, 7);
-  loadTab('schedule');
-}
+// ═══════════════════════════════════════════════
+//  View switching
+// ═══════════════════════════════════════════════
 
+function switchToMonth() { _viewMode = 'month'; _monthYear = _weekStart.slice(0, 7); loadTab('schedule'); }
 function switchToWeek() {
   _viewMode = 'week';
-  // Derive week start from current month view
   if (_monthYear) {
     const now = new Date();
     const curYm = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-    if (_monthYear === curYm) {
-      _weekStart = getMonday(new Date());
-    } else {
-      const [y, m] = _monthYear.split('-').map(Number);
-      _weekStart = getMonday(new Date(y, m-1, 1));
-    }
+    _weekStart = _monthYear === curYm ? getMonday(new Date()) : getMonday(new Date(parseInt(_monthYear), parseInt(_monthYear.split('-')[1])-1, 1));
   }
   loadTab('schedule');
 }
-
-function navigateMonth(yearMonth) {
-  _monthYear = yearMonth;
-  _viewMode = 'month';
-  // Also set _weekStart to first Monday of month for consistency
-  const [y, m] = yearMonth.split('-').map(Number);
-  _weekStart = getMonday(new Date(y, m-1, 1));
-  _cellShifts = {};
-  loadTab('schedule');
-}
-
-function goToWeek(dateStr) {
-  const d = new Date(dateStr);
-  _weekStart = getMonday(d);
-  _monthYear = dateStr.slice(0, 7);
-  _viewMode = 'week';
-  _cellShifts = {};
-  loadTab('schedule');
-}
+function navigateMonth(yearMonth) { _monthYear = yearMonth; _viewMode = 'month'; _weekStart = getMonday(new Date(parseInt(yearMonth), parseInt(yearMonth.split('-')[1])-1, 1)); loadTab('schedule'); }
+function goToWeek(dateStr) { _viewMode = 'week'; _weekStart = getMonday(new Date(dateStr)); _monthYear = dateStr.slice(0, 7); loadTab('schedule'); }
+function navigateWeek(weekStart) { _viewMode = 'week'; loadTab('schedule', weekStart); }
+function _offsetWeek(weekStart, delta) { const d = new Date(weekStart); d.setDate(d.getDate() + delta * 7); return d.toISOString().slice(0, 10); }
+function getMonday(d) { const dt = new Date(d); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); dt.setDate(diff); return dt.toISOString().slice(0, 10); }
+function getToday() { return new Date().toISOString().slice(0, 10); }
 
 // ═══════════════════════════════════════════════
-//  Shared helpers
+//  Chart
 // ═══════════════════════════════════════════════
-
-function navigateWeek(weekStart) {
-  _viewMode = 'week';
-  _cellShifts = {};
-  loadTab('schedule', weekStart);
-}
-
-function _offsetWeek(weekStart, delta) {
-  const d = new Date(weekStart);
-  d.setDate(d.getDate() + delta * 7);
-  return d.toISOString().slice(0, 10);
-}
-
-function staffColor(id) {
-  const colors = ['#1976d2','#388e3c','#e64a19','#7b1fa2','#c2185b','#00796b','#f57c00','#795548','#607d8b'];
-  const idx = (id || '').charCodeAt(0) || 0;
-  return colors[idx % colors.length];
-}
 
 async function renderMonthlyChart(yearMonth) {
   const canvas = document.getElementById('shiftChart');
@@ -300,98 +338,27 @@ async function renderMonthlyChart(yearMonth) {
   try {
     const payroll = await fetchJSON(`${API}/payroll?year_month=${yearMonth}`);
     const labels = payroll.map(p => p.staff_name);
-    const morning = payroll.map(p => p.morning_shifts);
-    const evening = payroll.map(p => p.evening_shifts);
+    const totalHours = payroll.map(p => p.total_hours || 0);
 
     canvas._chartInstance = new Chart(canvas, {
       type: 'bar',
       data: {
         labels,
-        datasets: [
-          { label: '早班', data: morning, backgroundColor: '#ff6f00' },
-          { label: '晚班', data: evening, backgroundColor: '#ffab40' },
-        ],
+        datasets: [{ label: '总工时', data: totalHours, backgroundColor: '#ff6f00' }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+        plugins: { legend: { display: false } },
         scales: {
-          x: { stacked: true, ticks: { font: { size: 11 } } },
-          y: { stacked: true, ticks: { stepSize: 2, font: { size: 11 } } },
+          y: { beginAtZero: true, ticks: { font: { size: 11 } } },
         },
       },
     });
   } catch(e) {
     canvas._chartInstance = new Chart(canvas, {
-      type: 'bar',
-      data: { labels: [], datasets: [] },
+      type: 'bar', data: { labels: [], datasets: [] },
       options: { responsive: true, maintainAspectRatio: false },
     });
-  }
-}
-
-// ═══════════════════════════════════════════════
-//  Edit panel
-// ═══════════════════════════════════════════════
-
-let _editingCell = null;
-
-function showEditPanel(cellId) {
-  _editingCell = cellId;
-  const rest = cellId.substring(5);
-  const dashIdx = rest.lastIndexOf('-');
-  const date = rest.substring(0, dashIdx);
-  const period = rest.substring(dashIdx + 1);
-  const existingIds = new Set(_cellShifts[cellId] || []);
-
-  document.getElementById('edit-title').textContent = `${date} ${dayName(date)} ${period}`;
-
-  let rowsHtml = '';
-  staffList.forEach(st => {
-    const checked = existingIds.has(st.id) ? 'checked' : '';
-    const defaultHours = st.full_day_hours || 11;
-    rowsHtml += `<div class="edit-row">
-      <label class="cb-label" style="flex:1">
-        <input type="checkbox" class="edit-check" data-staff="${st.id}" ${checked}>
-        ${st.name}
-      </label>
-      <input type="number" class="edit-hours" data-staff="${st.id}" value="${defaultHours}"
-        min="0" max="24" step="0.5"
-        style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:13px">
-      <span style="font-size:11px;color:var(--muted);margin-left:2px">h</span>
-    </div>`;
-  });
-  document.getElementById('edit-rows').innerHTML = rowsHtml;
-  document.getElementById('edit-panel').scrollIntoView({ behavior: 'smooth' });
-}
-
-async function saveEdit() {
-  if (!_editingCell) return;
-  const rest = _editingCell.substring(5);
-  const dashIdx = rest.lastIndexOf('-');
-  const date = rest.substring(0, dashIdx);
-  const period = rest.substring(dashIdx + 1);
-
-  const checks = document.querySelectorAll('.edit-check:checked');
-  const staffShifts = Array.from(checks).map(cb => {
-    const hoursInput = document.querySelector(`.edit-hours[data-staff="${cb.dataset.staff}"]`);
-    const hours = hoursInput ? parseFloat(hoursInput.value) || 11 : 11;
-    return { staff_id: cb.dataset.staff, hours };
-  });
-
-  try {
-    const res = await fetch(`${API}/schedule/cell`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, period, staff_shifts: staffShifts }),
-    });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || '请求失败'); }
-    _cellShifts = {};
-    showToast('排班已更新');
-    _editingCell = null;
-    loadTab(currentTab, _weekStart);
-  } catch (e) {
-    showToast('保存失败: ' + e.message);
   }
 }
