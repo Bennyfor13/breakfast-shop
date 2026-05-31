@@ -300,6 +300,13 @@ def api_add_income(data: dict, user_id: str = Depends(get_current_user)):
     return {"ok": True}
 
 
+@router.post("/accounting/delete-platform")
+def api_delete_platform(data: dict, user_id: str = Depends(get_current_user)):
+    from backend.modules.accounting import delete_platform_entry
+    delete_platform_entry(store, data["type"], data["date"], data["platform"])
+    return {"ok": True}
+
+
 @router.post("/accounting/expense")
 def api_add_expense(data: dict, user_id: str = Depends(get_current_user)):
     from backend.modules.accounting import record_expense

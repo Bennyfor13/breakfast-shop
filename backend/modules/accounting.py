@@ -83,6 +83,25 @@ def get_monthly_accounting(
     }
 
 
+def delete_platform_entry(
+    store: AbstractStore, type_: str, date: str, platform: str
+) -> bool:
+    """删除某日某平台的收支条目"""
+    if type_ == "income":
+        record = store.get_daily_income(date)
+        if record and platform in record.income:
+            del record.income[platform]
+            store.save_daily_income(record)
+            return True
+    elif type_ == "expense":
+        record = store.get_daily_expense(date)
+        if record and platform in record.expense:
+            del record.expense[platform]
+            store.save_daily_expense(record)
+            return True
+    return False
+
+
 def record_platform_revenue(
     store: AbstractStore,
     date: str,

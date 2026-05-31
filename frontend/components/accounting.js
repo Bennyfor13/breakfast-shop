@@ -218,9 +218,12 @@ async function loadDailyData(date) {
     if (data.income && Object.keys(data.income).length > 0) {
       const items = Object.entries(data.income)
         .map(([platform, amount]) =>
-          `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+          `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
             <span>${platform}</span>
-            <strong style="color:var(--good)">¥${amount.toFixed(2)}</strong>
+            <div style="display:flex;align-items:center;gap:8px">
+              <strong style="color:var(--good)">¥${amount.toFixed(2)}</strong>
+              <button class="btn-remove-sm" onclick="deletePlatform('income','${date}','${platform}')">×</button>
+            </div>
           </div>`
         )
         .join('');
@@ -234,9 +237,12 @@ async function loadDailyData(date) {
     if (data.expense && Object.keys(data.expense).length > 0) {
       const items = Object.entries(data.expense)
         .map(([platform, amount]) =>
-          `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+          `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
             <span>${platform}</span>
-            <strong style="color:var(--warn)">¥${amount.toFixed(2)}</strong>
+            <div style="display:flex;align-items:center;gap:8px">
+              <strong style="color:var(--warn)">¥${amount.toFixed(2)}</strong>
+              <button class="btn-remove-sm" onclick="deletePlatform('expense','${date}','${platform}')">×</button>
+            </div>
           </div>`
         )
         .join('');
@@ -374,6 +380,20 @@ function closeModalOnBackdrop(event, modalId) {
   if (event.target.id === modalId) {
     if (modalId === 'income-modal') closeIncomeModal();
     if (modalId === 'expense-modal') closeExpenseModal();
+  }
+}
+
+async function deletePlatform(type, date, platform) {
+  if (!confirm(`删除 ${platform} 的${type === 'income' ? '收入' : '支出'}记录？`)) return;
+  try {
+    await fetch('/api/accounting/delete-platform', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type, date, platform}),
+    });
+    loadDailyData(date);
+  } catch(e) {
+    showToast('删除失败');
   }
 }
 
