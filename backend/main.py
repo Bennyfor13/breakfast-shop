@@ -44,7 +44,7 @@ def create_app() -> FastAPI:
         shutdown_scheduler()
 
     # Feishu custom page routes — serve SPA with tab pre-selected
-    tabs = ["schedule", "inventory", "accounting", "pricing", "staff"]
+    tabs = ["schedule", "staff", "accounting", "menu", "pricing", "inventory"]
     index_html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
 
     for tab in tabs:
