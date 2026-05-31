@@ -188,9 +188,9 @@ def _schedule_jobs(token_provider):
         args=[token_provider], id="evening_accounting",
         replace_existing=True,
     )
-    # Monthly payroll on 1st at 09:07
+    # Monthly payroll on 1st at 09:00
     scheduler.add_job(
-        _push_monthly_payroll, "cron", day=1, hour=9, minute=7,
+        _push_monthly_payroll, "cron", day=1, hour=9, minute=0,
         args=[token_provider], id="monthly_payroll",
         replace_existing=True,
     )
