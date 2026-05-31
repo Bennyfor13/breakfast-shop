@@ -81,9 +81,10 @@ async function renderWeekView(el) {
             const staff = staffMap[s.staff_id];
             const name = staff ? staff.name : s.staff_id;
             const hours = s.hours || (staff ? staff.full_day_hours || 11 : 11);
-            return `<span class="staff-chip" title="${name}"
+            const hoursLabel = hours >= (staff ? staff.full_day_hours || 11 : 11) ? '全天' : `${hours}h`;
+            return `<span class="staff-chip" title="${name} ${hoursLabel}"
               style="background:${staffColor(s.staff_id)};color:#fff;padding:2px 5px;border-radius:3px;margin:1px;display:inline-block;font-size:11px;white-space:nowrap"
-              >${name}</span>`;
+              >${name} ${hoursLabel}</span>`;
           }).join('');
           html += `<div class="sched-cell" id="${cellId}" onclick="showEditPanel('${cellId}')">${chips}</div>`;
         } else {
