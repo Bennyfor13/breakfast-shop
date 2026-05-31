@@ -40,6 +40,22 @@ async function renderAccounting() {
         </div>
       </div>
 
+      <div id="confirm-modal" class="modal" style="display:none" onclick="closeModalOnBackdrop(event, 'confirm-modal')">
+        <div class="modal-content-enhanced" onclick="event.stopPropagation()" style="max-width:360px">
+          <div class="modal-header">
+            <h3>确认</h3>
+            <button class="modal-close" onclick="document.getElementById('confirm-modal').style.display='none'">×</button>
+          </div>
+          <div style="padding:24px 20px;text-align:center">
+            <p id="confirm-text" style="font-size:15px;color:var(--text);margin-bottom:20px"></p>
+            <div class="modal-footer" style="border:none;padding:0">
+              <button class="btn btn-outline" onclick="document.getElementById('confirm-modal').style.display='none'">取消</button>
+              <button class="btn" onclick="(document.getElementById('confirm-modal')._callback || (()=>{}))()">确定</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="expense-modal" class="modal" style="display:none" onclick="closeModalOnBackdrop(event, 'expense-modal')">
         <div class="modal-content-enhanced" onclick="event.stopPropagation()">
           <div class="modal-header">
@@ -384,17 +400,23 @@ function closeModalOnBackdrop(event, modalId) {
 }
 
 async function deletePlatform(type, date, platform) {
-  if (!confirm(`删除 ${platform} 的${type === 'income' ? '收入' : '支出'}记录？`)) return;
-  try {
-    await fetch('/api/accounting/delete-platform', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type, date, platform}),
-    });
-    loadDailyData(date);
-  } catch(e) {
-    showToast('删除失败');
-  }
+  const modal = document.getElementById('confirm-modal');
+  if (!modal) return;
+  document.getElementById('confirm-text').textContent = `删除 ${platform} 的${type === 'income' ? '收入' : '支出'}记录？`;
+  modal._callback = async () => {
+    try {
+      await fetch('/api/accounting/delete-platform', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type, date, platform}),
+      });
+      modal.style.display = 'none';
+      loadDailyData(date);
+    } catch(e) {
+      showToast('删除失败');
+    }
+  };
+  modal.style.display = 'flex';
 }
 
 function addCustomIncome() {
