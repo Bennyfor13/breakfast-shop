@@ -65,12 +65,9 @@ def calculate_salary(
     full_attendance = False
     if rest_days <= 2 and working_days > 0:
         full_attendance = True
-        # Get bonus amount from monthly fixed cost config
-        year_month = from_date[:7]
-        monthly_cost = store.get_monthly_cost(year_month)
-        full_attendance_bonus = monthly_cost.full_attendance_bonus if monthly_cost else 0
+        full_attendance_bonus = staff.full_attendance_bonus or 0
 
-    # Get bonus set by boss
+    # Get 提成 (commission) set by boss
     bonus = store.get_staff_bonus(staff_id, from_date[:7]) or 0
 
     base_pay = round(total_hours * hourly_wage, 1)

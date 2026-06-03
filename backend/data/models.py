@@ -20,6 +20,7 @@ class Staff(BaseModel):
     active: bool = True
     hourly_wage: float = 15.0
     full_day_hours: float = 11.0
+    full_attendance_bonus: float = 0  # 全勤奖（每人不同）
 
 
 class Ingredient(BaseModel):

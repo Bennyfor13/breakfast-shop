@@ -49,7 +49,7 @@ async function renderStaffList() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
             <h3>${s.name}</h3>
-            <p>角色: ${s.roles.join(' / ')} | 时薪 ¥${s.hourly_wage || 15}/h | 全天 ${s.full_day_hours || 11}h</p>
+            <p>角色: ${s.roles.join(' / ')} | 时薪 ¥${s.hourly_wage || 15}/h | 全天 ${s.full_day_hours || 11}h${s.full_attendance_bonus ? ` | 全勤奖 ¥${s.full_attendance_bonus}` : ''}</p>
             ${s.note ? `<p style="font-size:12px;color:var(--muted)">${s.note}</p>` : ''}
           </div>
           <div style="display:flex;gap:4px">
@@ -81,6 +81,10 @@ async function renderStaffList() {
               <div class="form-group">
                 <label>全天工时（小时）</label>
                 <input type="number" id="edit-staff-fullday" step="0.5" placeholder="11">
+              </div>
+              <div class="form-group">
+                <label>全勤奖（元/月）</label>
+                <input type="number" id="edit-staff-fa" step="50" min="0" placeholder="0">
               </div>
               <div class="form-group">
                 <label>备注</label>
@@ -127,16 +131,13 @@ async function renderStaffPayroll() {
 
     let html = `<h3 style="margin-top:12px">${ym} 工资单</h3>`;
 
-    // Full attendance bonus config
-    html += `<div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:12px;margin-bottom:12px">
-      <span style="font-size:14px;font-weight:500">🏆 全勤奖金额</span>
-      <div style="display:flex;align-items:center;gap:8px">
-        <input type="number" id="fa-bonus-amount" value="${faBonus || 0}" step="50" min="0"
-          style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;text-align:right;font-size:14px">
-        <span style="color:var(--muted)">元/人</span>
-        <button class="btn btn-sm" onclick="saveFABonus('${ym}')">保存</button>
-      </div>
-    </div>`;
+    // Full attendance info
+    const faCount = data.filter(p => p.full_attendance).length;
+    if (faCount > 0) {
+      html += `<div class="card" style="display:flex;align-items:center;gap:8px;padding:12px;margin-bottom:12px;font-size:14px">
+        <span>🏆 本月全勤 <strong>${faCount}</strong> 人</span>
+      </div>`;
+    }
 
     html += '<div class="stat-row">';
     html += `<div class="stat-card"><div class="stat-value">¥${totalPayroll.toFixed(0)}</div><div class="stat-label">工资总额</div></div>`;
@@ -148,7 +149,7 @@ async function renderStaffPayroll() {
     html += '</div>';
 
     html += '<div class="card"><h3>明细</h3><table><thead><tr>';
-    html += '<th>姓名</th><th>出勤</th><th>工时</th><th>底薪</th><th>全勤奖</th><th>奖金</th><th>合计</th>';
+    html += '<th>姓名</th><th>出勤</th><th>工时</th><th>底薪</th><th>全勤奖</th><th>提成</th><th>合计</th>';
     html += '</tr></thead><tbody>';
     data.forEach(p => {
       const faBadge = p.full_attendance ? '🏆' : '';
@@ -186,6 +187,7 @@ async function showEditStaffModal(id) {
   document.getElementById('edit-staff-name').value = s.name;
   document.getElementById('edit-staff-hourly').value = s.hourly_wage || 15;
   document.getElementById('edit-staff-fullday').value = s.full_day_hours || 11;
+  document.getElementById('edit-staff-fa').value = s.full_attendance_bonus || 0;
   document.getElementById('edit-staff-note').value = s.note || '';
   document.getElementById('edit-staff-modal').style.display = 'flex';
 }
@@ -206,13 +208,14 @@ async function handleEditStaffSubmit(e) {
   if (!name) { showToast('请输入姓名'); return; }
   const hourly = parseFloat(document.getElementById('edit-staff-hourly').value) || 15;
   const fullday = parseFloat(document.getElementById('edit-staff-fullday').value) || 11;
+  const fa = parseFloat(document.getElementById('edit-staff-fa').value) || 0;
   const note = document.getElementById('edit-staff-note').value.trim() || '';
 
   try {
     const res = await fetch(`${API}/staff/${editingStaffId}`, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name, hourly_wage: hourly, full_day_hours: fullday, note}),
+      body: JSON.stringify({name, hourly_wage: hourly, full_day_hours: fullday, full_attendance_bonus: fa, note}),
     });
     if (!res.ok) throw new Error('更新失败');
     showToast('员工已更新');
@@ -233,20 +236,6 @@ async function deleteStaff(id) {
   } catch(e) {
     showToast('删除失败: ' + e.message);
   }
-}
-
-async function saveFABonus(ym) {
-  const bonus = parseFloat(document.getElementById('fa-bonus-amount').value) || 0;
-  const rent = 0;
-  const utilities = 0;
-  const other = 0;
-  await fetch('/api/accounting/fixed-costs', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({month: ym, rent, utilities, other, full_attendance_bonus: bonus}),
-  });
-  showToast('全勤奖已保存');
-  loadTab(currentTab);
 }
 
 async function saveBonus(input) {
