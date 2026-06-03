@@ -301,6 +301,24 @@ async function renderMonthView(el) {
       html += '</tbody></table></div></div>';
     }
 
+    // Day edit modal (shared with week view)
+    html += `
+      <div id="sched-day-modal" class="modal" style="display:none" onclick="closeModalOnBackdropSched(event)">
+        <div class="modal-content-enhanced" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h3 id="sched-modal-title">编辑排班</h3>
+            <button class="modal-close" onclick="closeDayEditSched()">×</button>
+          </div>
+          <form id="sched-day-form">
+            <div id="sched-modal-rows" style="max-height:50vh;overflow-y:auto"></div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline" onclick="closeDayEditSched()">取消</button>
+              <button type="submit" class="btn">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>`;
+
     el.innerHTML = html;
   } catch(e) {
     el.innerHTML = `<div class="card"><p>加载失败: ${e.message}</p></div>`;
