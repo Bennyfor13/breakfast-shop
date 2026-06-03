@@ -61,17 +61,13 @@ def calculate_salary(
 
     # Full attendance = rest days ≤ 2
     rest_days = total_days - working_days
-    full_attendance_bonus = 0
-    full_attendance = False
-    if rest_days <= 2 and working_days > 0:
-        full_attendance = True
-        full_attendance_bonus = staff.full_attendance_bonus or 0
-
-    # Get 提成 (commission) set by boss
-    bonus = store.get_staff_bonus(staff_id, from_date[:7]) or 0
+    # Full attendance (auto-calc) and commission (manual input)
+    full_attendance = (rest_days <= 2 and working_days > 0)
+    full_attendance_bonus = store.get_staff_bonus(staff_id, f"{from_date[:7]}|fa") or 0
+    commission = store.get_staff_bonus(staff_id, from_date[:7]) or 0
 
     base_pay = round(total_hours * hourly_wage, 1)
-    subtotal = round(base_pay + full_attendance_bonus + bonus, 1)
+    subtotal = round(base_pay + full_attendance_bonus + commission, 1)
 
     return {
         "staff_id": staff.id,
@@ -83,7 +79,7 @@ def calculate_salary(
         "full_attendance": full_attendance,
         "full_attendance_bonus": full_attendance_bonus,
         "base_pay": base_pay,
-        "bonus": bonus,
+        "commission": commission,
         "total": subtotal,
     }
 
