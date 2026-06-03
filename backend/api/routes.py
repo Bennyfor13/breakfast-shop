@@ -11,7 +11,7 @@ from backend.modules.base_data import (
     create_menu_item, list_active_menu, get_bom_for_item, remove_menu_item,
 )
 from backend.modules.scheduling import (
-    generate_weekly_schedule, find_replacement,
+    find_replacement,
     edit_shift, assign_replacement, move_shift, set_cell_shifts,
 )
 from backend.modules.inventory import (
@@ -91,10 +91,9 @@ def api_set_demand(data: dict, user_id: str = Depends(get_current_user)):
 # -- Schedule --
 @router.get("/schedule/month")
 def api_get_month_schedule(year_month: str):
-    """Return all shifts for a month, auto-generating missing weeks."""
+    """Return all shifts for a month (existing only, no auto-generation)."""
     from calendar import monthrange
     from backend.modules.payroll import _gen_week_starts
-    from backend.modules.scheduling import generate_weekly_schedule
 
     year, month = int(year_month[:4]), int(year_month[5:7])
     _, last_day = monthrange(year, month)
@@ -103,13 +102,7 @@ def api_get_month_schedule(year_month: str):
 
     all_shifts = []
     for week_start in _gen_week_starts(from_date, to_date):
-        existing = store.get_shifts(week_start)
-        if existing:
-            all_shifts.extend(existing)
-        else:
-            schedule = generate_weekly_schedule(store, week_start)
-            store.save_shifts(schedule.shifts)
-            all_shifts.extend(schedule.shifts)
+        all_shifts.extend(store.get_shifts(week_start))
 
     # Build per-person summary (hours-based)
     staff_list = [s.model_dump() for s in store.list_staff()]
@@ -145,14 +138,8 @@ def api_get_month_schedule(year_month: str):
 
 @router.get("/schedule")
 def api_get_schedule(week_start: str, boss_absent: str = "", regenerate: str = ""):
-    # Return saved shifts if they exist (preserves manual edits / substitutions)
     existing = store.get_shifts(week_start)
-    if existing and regenerate.lower() != "true":
-        return Schedule(week_start=week_start, shifts=existing).model_dump()
-    absent = set(boss_absent.split(",")) if boss_absent else set()
-    schedule = generate_weekly_schedule(store, week_start, absent)
-    store.save_shifts(schedule.shifts)
-    return schedule.model_dump()
+    return Schedule(week_start=week_start, shifts=existing).model_dump()
 
 
 @router.get("/schedule/replacement")
