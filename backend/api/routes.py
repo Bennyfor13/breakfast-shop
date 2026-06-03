@@ -184,6 +184,18 @@ def api_set_day(data: dict, user_id: str = Depends(get_current_user)):
     return {"ok": True, "shifts": [s.model_dump() for s in shifts]}
 
 
+@router.post("/schedule/clear-week")
+def api_clear_week(week_start: str, user_id: str = Depends(get_current_user)):
+    from datetime import datetime, timedelta
+    dt = datetime.strptime(week_start, "%Y-%m-%d")
+    end = (dt + timedelta(days=7)).strftime("%Y-%m-%d")
+    all_shifts = store.get_shifts(week_start)
+    kept = [s for s in all_shifts if s.date < week_start or s.date >= end]
+    store.shifts = kept  # Direct access since save_shifts skips empty
+    store._save()
+    return {"ok": True}
+
+
 @router.post("/schedule/move")
 def api_move_shift(data: dict, user_id: str = Depends(get_current_user)):
     success = move_shift(
