@@ -198,14 +198,12 @@ def _get_staff_name(staff_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _handle_schedule() -> dict:
-    from backend.modules.scheduling import generate_weekly_schedule
-
     today = date.today()
     week_start = _get_week_start(today)
-    schedule = generate_weekly_schedule(store, week_start)
+    shifts = store.get_shifts(week_start)
 
     shifts_by_date: dict[str, dict[str, list[str]]] = {}
-    for s in schedule.shifts:
+    for s in shifts:
         shifts_by_date.setdefault(s.date, {}).setdefault(s.period, []).append(
             f"{_get_staff_name(s.staff_id)}"
         )
@@ -676,11 +674,9 @@ async def handle_message(text: str) -> dict:
     # Help / unknown — check if it's just a staff name, then show fallback
     staff_id = _find_staff_by_name(text.strip())
     if staff_id:
-        from backend.modules.scheduling import generate_weekly_schedule
         today = date.today()
         ws = _get_week_start(today)
-        schedule = generate_weekly_schedule(store, ws)
-        person_shifts = [s for s in schedule.shifts if s.staff_id == staff_id]
+        person_shifts = [s for s in store.get_shifts(ws) if s.staff_id == staff_id]
         if person_shifts:
             by_day: dict[str, list] = {}
             for s in person_shifts:

@@ -189,13 +189,7 @@ def auto_reschedule_day(
     monday = dt - timedelta(days=dt.weekday())
     week_start = monday.strftime("%Y-%m-%d")
 
-    # Ensure the week's schedule exists
     all_week = store.get_shifts(week_start)
-    if not all_week:
-        schedule = generate_weekly_schedule(store, week_start)
-        store.save_shifts(schedule.shifts)
-        all_week = schedule.shifts
-
     existing = store.get_shifts_by_date(date_str)
     absent_shifts = [s for s in existing if s.staff_id == staff_id]
     if not absent_shifts:
