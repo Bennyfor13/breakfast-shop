@@ -235,6 +235,7 @@ async function renderMonthView(el) {
     html += `<div class="view-toggle">
       <button class="btn btn-sm btn-outline" onclick="switchToWeek()">周</button>
       <button class="btn btn-sm btn-outline active">月</button>
+      <button class="btn btn-sm" style="background:var(--danger);color:#fff;margin-left:8px" onclick="clearMonthSchedule()">清空本月</button>
     </div>`;
 
     html += '<div class="card" style="overflow-x:auto">';
@@ -322,6 +323,26 @@ function switchToWeek() {
 }
 function navigateMonth(yearMonth) { _monthYear = yearMonth; _viewMode = 'month'; _weekStart = getMonday(new Date(parseInt(yearMonth), parseInt(yearMonth.split('-')[1])-1, 1)); loadTab('schedule'); }
 function goToWeek(dateStr) { _viewMode = 'week'; _weekStart = getMonday(new Date(dateStr)); _monthYear = dateStr.slice(0, 7); loadTab('schedule'); }
+async function clearMonthSchedule() {
+  if (!_monthYear) return;
+  const modal = document.getElementById('sched-day-modal');
+  document.getElementById('sched-modal-title').textContent = `清空 ${_monthYear} 整月排班？`;
+  const container = document.getElementById('sched-modal-rows');
+  container.innerHTML = `<p style="padding:20px;text-align:center;color:var(--muted)">此操作不可撤销，确定要清空本月所有人排班吗？</p>`;
+  const form = document.getElementById('sched-day-form');
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await fetch(`${API}/schedule/clear-month?year_month=${_monthYear}`, { method: 'POST' });
+      showToast('本月排班已清空');
+      closeDayEditSched();
+      form.onsubmit = saveDayEditSched;
+      loadTab(currentTab);
+    } catch(e) { showToast('清空失败'); }
+  };
+  modal.style.display = 'flex';
+}
+
 async function clearWeekSchedule() {
   if (!_weekStart) return;
   const modal = document.getElementById('sched-day-modal');

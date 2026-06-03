@@ -191,7 +191,20 @@ def api_clear_week(week_start: str, user_id: str = Depends(get_current_user)):
     end = (dt + timedelta(days=7)).strftime("%Y-%m-%d")
     all_shifts = store.get_shifts(week_start)
     kept = [s for s in all_shifts if s.date < week_start or s.date >= end]
-    store.shifts = kept  # Direct access since save_shifts skips empty
+    store.shifts = kept
+    store._save()
+    return {"ok": True}
+
+
+@router.post("/schedule/clear-month")
+def api_clear_month(year_month: str, user_id: str = Depends(get_current_user)):
+    from calendar import monthrange
+    from backend.modules.payroll import _gen_week_starts
+    from_date = f"{year_month}-01"
+    _, last_day = monthrange(int(year_month[:4]), int(year_month[5:7]))
+    to_date = f"{year_month}-{last_day:02d}"
+    kept = [s for s in store.shifts if s.date < from_date or s.date > to_date]
+    store.shifts = kept
     store._save()
     return {"ok": True}
 
