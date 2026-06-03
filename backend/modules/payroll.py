@@ -66,7 +66,10 @@ def calculate_salary(
     full_attendance_bonus = store.get_staff_bonus(staff_id, f"{from_date[:7]}|fa") or 0
     commission = store.get_staff_bonus(staff_id, from_date[:7]) or 0
 
-    base_pay = round(total_hours * hourly_wage, 1)
+    calculated_base = round(total_hours * hourly_wage, 1)
+    # Use manual base pay if set, otherwise use calculated
+    manual_base = store.get_staff_bonus(staff_id, f"{from_date[:7]}|base") or 0
+    base_pay = manual_base if manual_base > 0 else calculated_base
     subtotal = round(base_pay + full_attendance_bonus + commission, 1)
 
     return {

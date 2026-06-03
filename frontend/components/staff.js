@@ -153,7 +153,10 @@ async function renderStaffPayroll() {
       html += `<td><strong>${p.staff_name} ${faBadge}</strong></td>`;
       html += `<td>${p.working_days || 0}天</td>`;
       html += `<td>${(p.total_hours || 0).toFixed(1)}h</td>`;
-      html += `<td>¥${(p.base_pay || 0).toFixed(0)}</td>`;
+      html += `<td><input type="number" class="base-input" data-staff="${p.staff_id || ''}" data-ym="${ym}"
+        value="${(p.base_pay || 0).toFixed(0)}" step="50" min="0"
+        style="width:65px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;text-align:right;font-size:13px"
+        onchange="saveBasePay(this)"></td>`;
       html += `<td>
         <input type="number" class="fa-input" data-staff="${p.staff_id || ''}" data-ym="${ym}"
           value="${(p.full_attendance_bonus || 0).toFixed(0)}" step="50" min="0"
@@ -235,6 +238,20 @@ async function deleteStaff(id) {
   } catch(e) {
     showToast('删除失败: ' + e.message);
   }
+}
+
+async function saveBasePay(input) {
+  const staffId = input.dataset.staff;
+  const yearMonth = input.dataset.ym;
+  const val = parseFloat(input.value) || 0;
+  try {
+    await fetch('/api/payroll/bonus', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({staff_id: `${staffId}|base`, year_month: yearMonth, bonus: val}),
+    });
+    showToast('底薪已更新');
+  } catch(e) { showToast('保存底薪失败'); }
 }
 
 async function saveFABonus(input) {
