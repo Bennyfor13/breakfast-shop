@@ -137,6 +137,7 @@ class MonthlyFixedCost(BaseModel):
     rent: float
     utilities: float
     other: float
+    full_attendance_bonus: float = 0  # 全勤奖金额
 
     def daily_cost(self, days_in_month: int = 30) -> float:
         return (self.rent + self.utilities + self.other) / days_in_month

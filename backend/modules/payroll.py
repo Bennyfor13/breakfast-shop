@@ -48,20 +48,46 @@ def calculate_salary(
     total_hours = _total_month_hours(store, staff_id, from_date, to_date)
     hourly_wage = staff.hourly_wage or 15
 
+    # Count working days in the month
+    working_days = 0
+    for week_start in _gen_week_starts(from_date, to_date):
+        for s in store.get_shifts(week_start):
+            if s.staff_id == staff_id and from_date <= s.date <= to_date and s.hours > 0:
+                working_days += 1
+
+    # Count total days in this month
+    from calendar import monthrange
+    _, total_days = monthrange(int(from_date[:4]), int(from_date[5:7]))
+
+    # Full attendance = rest days ≤ 2
+    rest_days = total_days - working_days
+    full_attendance_bonus = 0
+    full_attendance = False
+    if rest_days <= 2 and working_days > 0:
+        full_attendance = True
+        # Get bonus amount from monthly fixed cost config
+        year_month = from_date[:7]
+        monthly_cost = store.get_monthly_cost(year_month)
+        full_attendance_bonus = monthly_cost.full_attendance_bonus if monthly_cost else 0
+
     # Get bonus set by boss
     bonus = store.get_staff_bonus(staff_id, from_date[:7]) or 0
 
     base_pay = round(total_hours * hourly_wage, 1)
-    total = round(base_pay + bonus, 1)
+    subtotal = round(base_pay + full_attendance_bonus + bonus, 1)
 
     return {
         "staff_id": staff.id,
         "staff_name": staff.name,
         "total_hours": total_hours,
         "hourly_wage": hourly_wage,
+        "working_days": working_days,
+        "rest_days": rest_days,
+        "full_attendance": full_attendance,
+        "full_attendance_bonus": full_attendance_bonus,
         "base_pay": base_pay,
         "bonus": bonus,
-        "total": total,
+        "total": subtotal,
     }
 
 
