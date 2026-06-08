@@ -75,11 +75,9 @@ async function renderWeekView(el) {
         d.setDate(d.getDate() + i);
         const dateStr = d.toISOString().slice(0, 10);
         const totalHours = (byStaff[st.id] && byStaff[st.id][dateStr]) || 0;
-        const fullDay = st.full_day_hours || 11;
-
         let display, cls;
         if (totalHours <= 0) { display = '—'; cls = 'sched-rest'; }
-        else if (Math.abs(totalHours - fullDay) < 0.01) { display = '全天'; cls = 'sched-full'; }
+        else if (Math.abs(totalHours - 11) < 0.01) { display = '全天11h'; cls = 'sched-full'; }
         else { display = totalHours + 'h'; cls = 'sched-partial'; }
 
         html += `<div class="sched-cell ${cls}" onclick="openDayEditModal('${dateStr}')">${display}</div>`;
