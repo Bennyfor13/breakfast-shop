@@ -752,6 +752,11 @@ async def _reply_message(message_id: str, card: dict):
 # Webhook endpoint
 # ---------------------------------------------------------------------------
 
+@feishu_router.get("/webhook")
+async def feishu_webhook_get():
+    return {"status": "ok", "message": "Feishu webhook endpoint ready"}
+
+
 @feishu_router.post("/webhook")
 async def feishu_webhook(req: Request):
     body = await req.json()
