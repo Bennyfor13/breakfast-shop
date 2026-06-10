@@ -1,5 +1,5 @@
 const API = '/api';
-let currentTab = 'schedule';
+let currentTab = 'dashboard';
 
 // ── helpers ──────────────────────────────────────────
 
@@ -61,6 +61,7 @@ function loadTab(tab, extra) {
   const content = document.getElementById('content');
   content.innerHTML = '<div class="loading">加载中...</div>';
   switch(tab) {
+    case 'dashboard': renderDashboard(content); break;
     case 'schedule': renderSchedule(content, extra); break;
     case 'inventory': renderInventory(content); break;
     case 'accounting': renderAccounting(); break;
