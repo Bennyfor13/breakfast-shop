@@ -7,35 +7,25 @@ async function renderDashboard(el) {
     const yearMonth = today.slice(0, 7);
     const ymShort = today.slice(0, 7);
 
-    // Fetch all data in parallel
-    const [schedData, staffList, dailyData, monthlyData, costs, payroll] = await Promise.all([
-      fetchJSON(`${API}/schedule?week_start=${getMonday(new Date())}`),
-      fetchJSON(`${API}/staff`),
-      fetchJSON(`${API}/accounting/daily?date=${today}`),
-      fetchJSON(`${API}/accounting/monthly?year_month=${ymShort}`),
-      fetchJSON(`${API}/accounting/fixed-costs?month=${ymShort}`),
-      fetchJSON(`${API}/payroll?year_month=${ymShort}`).catch(() => []),
-    ]);
+    // Single dashboard endpoint (fast!)
+    const data = await fetchJSON(`${API}/dashboard`);
 
+    const { today_staff, staff, accounting, total_wages } = data;
     const staffMap = {};
-    staffList.forEach(s => { staffMap[s.id] = s; });
+    staff.forEach(s => { staffMap[s.id] = s; });
 
-    // Get today's shifts
-    const todayShifts = schedData.shifts.filter(s => s.date === today);
-    const todayStaff = todayShifts.map(s => {
+    const todayStaff = today_staff.map(s => {
       const st = staffMap[s.staff_id];
       return { name: st ? st.name : s.staff_id, hours: s.hours || 11 };
     });
 
-    // Stats
-    const totalIncome = monthlyData.total_income || 0;
-    const totalExpense = monthlyData.total_expense || 0;
+    const totalIncome = accounting.total_income || 0;
+    const totalExpense = accounting.total_expense || 0;
     const netProfit = totalIncome - totalExpense;
     const profitRate = totalIncome > 0 ? (netProfit / totalIncome * 100).toFixed(1) : 0;
-    const totalWages = payroll.reduce((s, p) => s + (p.total || 0), 0);
 
     // Build income by platform
-    const incomeEntries = Object.entries(monthlyData.income || {}).sort((a, b) => b[1] - a[1]);
+    const incomeEntries = Object.entries(accounting.income || {}).sort((a, b) => b[1] - a[1]);
     const totalIncomeSum = incomeEntries.reduce((s, [, v]) => s + v, 0);
 
     // Build expense breakdown
@@ -152,10 +142,7 @@ async function renderDailyChart(yearMonth) {
   if (canvas._chartInstance) canvas._chartInstance.destroy();
 
   try {
-    // Get daily breakdown from backend
     const monthlyData = await fetchJSON(`${API}/accounting/monthly?year_month=${yearMonth}`);
-
-    // Since we don't have daily breakdown from monthly endpoint, show income/expense comparison
     const labels = ['收入', '支出', '利润'];
     const income = monthlyData.total_income || 0;
     const expense = monthlyData.total_expense || 0;

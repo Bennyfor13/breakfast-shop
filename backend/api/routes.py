@@ -277,6 +277,39 @@ def api_save_performance(data: dict, user_id: str = Depends(get_current_user)):
     return {"ok": True}
 
 
+# -- Dashboard overview (combined endpoint for speed) --
+@router.get("/dashboard")
+def api_dashboard():
+    from datetime import date, timedelta
+    from calendar import monthrange
+    from backend.modules.payroll import _gen_week_starts
+    today = date.today().strftime("%Y-%m-%d")
+    year_month = today[:7]
+
+    # Today shifts
+    shifts_today = store.get_shifts_by_date(today)
+    today_staff = [{"staff_id": s.staff_id, "hours": s.hours or 11} for s in shifts_today]
+
+    staff_list = [s.model_dump() for s in store.list_staff()]
+
+    # Accounting summary
+    from backend.modules.accounting import get_monthly_accounting
+    accounting = get_monthly_accounting(store, year_month)
+
+    # Monthly payroll total
+    from backend.modules.payroll import generate_monthly_payroll
+    payroll = generate_monthly_payroll(store, year_month)
+    total_wages = sum(r.get("total", 0) for r in payroll)
+
+    return {
+        "date": today,
+        "today_staff": today_staff,
+        "staff": staff_list,
+        "accounting": accounting,
+        "total_wages": total_wages,
+    }
+
+
 # -- Accounting --
 @router.get("/accounting/monthly")
 def api_get_monthly_accounting(year_month: str):
