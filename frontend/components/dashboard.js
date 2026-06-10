@@ -2,14 +2,25 @@
 // Depends on: Chart.js, fetchJSON(), loadTab(), currentTab
 
 async function renderDashboard(el) {
+  const today = getToday();
+  const yearMonth = today.slice(0, 7);
+  const dayNames = ['日','一','二','三','四','五','六'];
+  const dayLabel = `周${dayNames[new Date(today).getDay()]}`;
+
+  // Show skeleton immediately
+  el.innerHTML = `
+    <h2>🥟 小胖包子王</h2>
+    <p style="font-size:13px;color:var(--muted);margin-top:-8px;margin-bottom:16px">${today} ${dayLabel}</p>
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-value" style="color:var(--good)">—</div><div class="stat-label">本月收入</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--warn)">—</div><div class="stat-label">本月支出</div></div>
+      <div class="stat-card"><div class="stat-value">—</div><div class="stat-label">本月利润</div></div>
+    </div>
+    <div class="card"><p style="text-align:center;color:var(--muted);padding:20px 0">加载中...</p></div>
+  `;
+
   try {
-    const today = getToday();
-    const yearMonth = today.slice(0, 7);
-    const ymShort = today.slice(0, 7);
-
-    // Single dashboard endpoint (fast!)
     const data = await fetchJSON(`${API}/dashboard`);
-
     const { today_staff, staff, accounting, total_wages } = data;
     const staffMap = {};
     staff.forEach(s => { staffMap[s.id] = s; });
