@@ -40,7 +40,7 @@ async function renderDashboard(el) {
     const totalIncomeSum = incomeEntries.reduce((s, [, v]) => s + v, 0);
 
     // Build expense breakdown
-    const expenseEntries = Object.entries(monthlyData.expense || {}).sort((a, b) => b[1] - a[1]);
+    const expenseEntries = Object.entries(accounting.expense || {}).sort((a, b) => b[1] - a[1]);
     const totalExpenseSum = expenseEntries.reduce((s, [, v]) => s + v, 0);
 
     // Build daily income data for chart
