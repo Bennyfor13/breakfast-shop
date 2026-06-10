@@ -296,17 +296,30 @@ def api_dashboard():
     from backend.modules.accounting import get_monthly_accounting
     accounting = get_monthly_accounting(store, year_month)
 
-    # Monthly payroll total
-    from backend.modules.payroll import generate_monthly_payroll
-    payroll = generate_monthly_payroll(store, year_month)
-    total_wages = sum(r.get("total", 0) for r in payroll)
+    # Monthly wages - fast estimate (skip full payroll calc)
+    from backend.modules.payroll import _total_month_hours
+    from calendar import monthrange
+    year = int(year_month[:4])
+    month = int(year_month[5:7])
+    _, last_day = monthrange(year, month)
+    from_date = f"{year_month}-01"
+    to_date = f"{year_month}-{last_day:02d}"
+
+    total_wages = 0
+    for s in store.list_staff():
+        hours = _total_month_hours(store, s.id, from_date, to_date)
+        wage = s.hourly_wage or 15
+        base = hours * wage
+        bonus = store.get_staff_bonus(s.id, year_month) or 0
+        fa_bonus = store.get_staff_bonus(s.id, f"{year_month}|fa") or 0
+        total_wages += base + bonus + fa_bonus
 
     return {
         "date": today,
         "today_staff": today_staff,
         "staff": staff_list,
         "accounting": accounting,
-        "total_wages": total_wages,
+        "total_wages": round(total_wages, 1),
     }
 
 
