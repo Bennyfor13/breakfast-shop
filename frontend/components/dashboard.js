@@ -122,9 +122,6 @@ async function renderDashboard(el) {
       html += `<div class="card"><h3>💸 本月支出</h3>${expenseHtml}</div>`;
     }
 
-    // Daily income chart
-    html += '<div class="card"><h3>📅 本月每日收入</h3><div class="chart-wrap"><canvas id="dashboardChart"></canvas></div></div>';
-
     // Bottom nav buttons
     html += `
       <div class="card" style="margin-top:16px">
@@ -139,45 +136,7 @@ async function renderDashboard(el) {
     el.innerHTML = html;
 
     // Render chart
-    renderDailyChart(yearMonth);
-
-  } catch(e) {
+    } catch(e) {
     el.innerHTML = `<div class="card"><p style="color:var(--danger)">加载失败: ${e.message}</p></div>`;
-  }
-}
-
-async function renderDailyChart(yearMonth) {
-  const canvas = document.getElementById('dashboardChart');
-  if (!canvas) return;
-  if (canvas._chartInstance) canvas._chartInstance.destroy();
-
-  try {
-    const monthlyData = await fetchJSON(`${API}/accounting/monthly?year_month=${yearMonth}`);
-    const labels = ['收入', '支出', '利润'];
-    const income = monthlyData.total_income || 0;
-    const expense = monthlyData.total_expense || 0;
-    const profit = income - expense;
-
-    canvas._chartInstance = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: '金额 (¥)',
-          data: [income, expense, profit],
-          backgroundColor: ['var(--good)', 'var(--warn)', 'var(--primary)'],
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { beginAtZero: true, ticks: { font: { size: 11 } } },
-        },
-      },
-    });
-  } catch(e) {
-    // silent fail
   }
 }
