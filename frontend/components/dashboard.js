@@ -53,47 +53,40 @@ async function renderDashboard(el) {
     const dayLabel = `周${dayNames[todayObj.getDay()]}`;
 
     let html = `
-      <div style="padding:0 0 16px 0">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <div>
-            <h2 style="margin:0;font-size:20px">🥟 小胖包子王</h2>
-            <div style="font-size:13px;color:var(--muted);margin-top:4px">${today} ${dayLabel}</div>
-          </div>
-        </div>
+      <h2>🥟 小胖包子王</h2>
+      <p style="font-size:13px;color:var(--muted);margin-top:-8px;margin-bottom:16px">${today} ${dayLabel}</p>
 
-        <!-- Stat cards -->
-        <div class="stat-row">
-          <div class="stat-card">
-            <div class="stat-value" style="color:var(--good)">¥${totalIncome.toFixed(0)}</div>
-            <div class="stat-label">本月收入</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" style="color:var(--warn)">¥${totalExpense.toFixed(0)}</div>
-            <div class="stat-label">本月支出</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" style="color:${netProfit >= 0 ? 'var(--good)' : 'var(--danger)'}">¥${netProfit.toFixed(0)}</div>
-            <div class="stat-label">本月利润</div>
-          </div>
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-value" style="color:var(--good)">¥${totalIncome.toFixed(0)}</div>
+          <div class="stat-label">本月收入</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:var(--warn)">¥${totalExpense.toFixed(0)}</div>
+          <div class="stat-label">本月支出</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:${netProfit >= 0 ? 'var(--good)' : 'var(--danger)'}">¥${netProfit.toFixed(0)}</div>
+          <div class="stat-label">本月利润</div>
+        </div>
+      </div>
 
-        <!-- Profit rate -->
-        <div style="background:var(--primary-light);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:14px;font-weight:600">🏆 利润率</span>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="margin:0">🏆 利润率</h3>
           <span style="font-size:22px;font-weight:700;color:${netProfit >= 0 ? 'var(--good)' : 'var(--danger)'}">${profitRate}%</span>
         </div>
-
-        <!-- Today's staff -->
-        <div class="card">
-          <h3>👥 今日上班</h3>
-          ${todayStaff.length > 0
-            ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-                ${todayStaff.map(st => `<span style="background:var(--primary-light);color:var(--primary);padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600">${st.name} ${st.hours}h</span>`).join('')}
-               </div>`
-            : '<p style="color:var(--muted);font-size:13px;padding:8px 0">今日暂无排班</p>'
-          }
-          ${totalWages > 0 ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">本月工资合计：¥${totalWages.toFixed(0)}</div>` : ''}
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)">
+          <span>👥 今日上班 ${todayStaff.length}人</span>
+          ${totalWages > 0 ? `<span>本月工资 ¥${totalWages.toFixed(0)}</span>` : ''}
         </div>
+        ${todayStaff.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+              ${todayStaff.map(st => `<span style="background:var(--primary-light);color:var(--primary);padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600">${st.name} ${st.hours}h</span>`).join('')}
+             </div>`
+          : '<p style="color:var(--muted);font-size:13px;padding:8px 0 0 0">今日暂无排班</p>'
+        }
+      </div>
     `;
 
     // Income by platform
@@ -133,7 +126,9 @@ async function renderDashboard(el) {
 
     // Bottom nav buttons
     html += `
-        <div style="display:flex;gap:8px;margin-top:16px">
+    html += `
+      <div class="card" style="margin-top:16px">
+        <div style="display:flex;gap:8px">
           <button class="btn" onclick="loadTab('schedule')" style="flex:1">📋 排班</button>
           <button class="btn btn-outline" onclick="loadTab('accounting')" style="flex:1">💰 记账</button>
           <button class="btn btn-outline" onclick="loadTab('staff')" style="flex:1">👤 工资</button>
