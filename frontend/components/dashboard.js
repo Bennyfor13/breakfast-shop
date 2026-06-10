@@ -79,7 +79,7 @@ async function renderDashboard(el) {
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)">
           <span>👥 今日上班 ${todayStaff.length}人</span>
-          ${totalWages > 0 ? `<span>本月工资 ¥${totalWages.toFixed(0)}</span>` : ''}
+          ${total_wages > 0 ? `<span>本月工资 ¥${total_wages.toFixed(0)}</span>` : ''}
         </div>
         ${todayStaff.length > 0
           ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
