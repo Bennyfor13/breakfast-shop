@@ -127,7 +127,6 @@ async function renderDashboard(el) {
 
     // Bottom nav buttons
     html += `
-    html += `
       <div class="card" style="margin-top:16px">
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="loadTab('schedule')" style="flex:1">📋 排班</button>
